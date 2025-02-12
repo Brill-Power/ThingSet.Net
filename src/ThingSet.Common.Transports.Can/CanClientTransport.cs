@@ -55,8 +55,8 @@ public class CanClientTransport : CanTransportBase, IClientTransport
         {
             CanFilters = new[]
             {
-                new CanFilter((uint)MessageType.SingleFrameReport | CanID.SetSource(destinationNodeAddress), CanID.TypeMask | CanID.SourceMask),
-                new CanFilter((uint)MessageType.MultiFrameReport | CanID.SetSource(destinationNodeAddress), CanID.TypeMask | CanID.SourceMask),
+                new CanFilter((uint)MessagePriority.ReportHigh | (uint)MessageType.SingleFrameReport | CanID.SetSource(destinationNodeAddress), (uint)MessagePriority.ReportHigh | CanID.TypeMask | CanID.SourceMask),
+                new CanFilter((uint)MessagePriority.ReportHigh | (uint)MessageType.MultiFrameReport | CanID.SetSource(destinationNodeAddress), (uint)MessagePriority.ReportHigh | CanID.TypeMask | CanID.SourceMask),
             },
             AllCanFiltersMustMatch = false,
             EnableCanFdFrames = canInterface.IsFdMode,
