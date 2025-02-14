@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-﻿using System;
+using System;
 using System.Collections.Generic;
 using System.Formats.Cbor;
 using System.IO;
@@ -25,7 +25,8 @@ public class ThingSetClient : IThingSetClient
 
     private readonly IClientTransport _transport;
 
-    private readonly Lazy<ThingSetSchema> _schema;
+    private readonly IThingSetSchemaProvider _schemaProvider;
+    private ThingSetSchema _schema = ThingSetSchema.Empty;
 
     private readonly object _lock = new object();
 
@@ -38,7 +39,7 @@ public class ThingSetClient : IThingSetClient
     public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider)
     {
         _transport = transport;
-        _schema = new Lazy<ThingSetSchema>(() => schemaProvider.GetSchema(this));
+        _schemaProvider = schemaProvider;
     }
 
     /// <summary>
@@ -57,14 +58,15 @@ public class ThingSetClient : IThingSetClient
     /// is received.</param>
     public async ValueTask SubscribeAsync(Action<uint, string?, object?> callback)
     {
-        ThingSetSchema schema = _schema.Value; // force evaluation
+        EnsureSchema();
         _callback = callback;
         await _transport.SubscribeAsync(OnReportReceived);
     }
 
     public IEnumerable<ThingSetNode> GetNodes(ThingSetNodeEnumerationOptions options)
     {
-        return _schema.Value.GetNodes(options);
+        EnsureSchema();
+        return _schema.GetNodes(options);
     }
 
     public object? Get(uint id)
@@ -191,7 +193,9 @@ public class ThingSetClient : IThingSetClient
             {
                 foreach (uint key in map.Keys)
                 {
-                    _schema.Value.TryGetNode(key, out ThingSetNode? property);
+                    // deliberately assuming that the schema is already populated
+                    // as we called EnsureSchema() when we subscribed
+                    _schema.TryGetNode(key, out ThingSetNode? property);
                     object value = map[key];
                     _callback?.Invoke(key, property?.FullyQualifiedName, value);
                 }
@@ -208,5 +212,13 @@ public class ThingSetClient : IThingSetClient
     public void Dispose()
     {
         _transport.Dispose();
+    }
+
+    private void EnsureSchema()
+    {
+        if (_schema.IsEmpty)
+        {
+            _schema = _schemaProvider.GetSchema(this);
+        }
     }
 }
