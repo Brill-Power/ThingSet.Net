@@ -153,7 +153,7 @@ public class PeerAddressListener : IDisposable
                 {
                     exceptions.Clear();
                     byte peerId = CanID.GetSource(readFrame.CanId);
-                    if (peerId != CanID.BroadcastAddress && peerId != CanID.AnonymousAddress)
+                    if (peerId != CanID.BroadcastAddress && peerId != CanID.AnonymousAddress && peerId != _canInterface.NodeAddress)
                     {
                         if (_lastSeenByPeerAddress.TryAdd(peerId, DateTime.UtcNow))
                         {
