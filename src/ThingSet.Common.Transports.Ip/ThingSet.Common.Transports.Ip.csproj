@@ -20,4 +20,8 @@
     <PackageTags>iot</PackageTags>
   </PropertyGroup>
 
+  <ItemGroup>
+    <None Include="README.md" Pack="True" Path="/" />
+  </ItemGroup>
+
 </Project>

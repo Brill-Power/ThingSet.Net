@@ -17,6 +17,10 @@
   </PropertyGroup>
 
   <ItemGroup>
+    <None Include="README.md" Pack="True" Path="/" />
+  </ItemGroup>
+
+  <ItemGroup>
     <PackageReference Include="SocketCANSharp" Version="0.12.0" />
   </ItemGroup>
 

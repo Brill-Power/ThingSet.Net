@@ -17,6 +17,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <None Include="README.md" Pack="True" Path="/" />
+    </ItemGroup>
+
+    <ItemGroup>
         <ProjectReference Include="..\ThingSet.Common\ThingSet.Common.csproj" />
     </ItemGroup>
 
