@@ -16,7 +16,12 @@
     <Description>IP transport for .NET ThingSet client</Description>
     <PackageId>ThingSet.Common.Transports.Ip</PackageId>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
     <PackageTags>iot</PackageTags>
   </PropertyGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
 
 </Project>

@@ -12,11 +12,16 @@
         <Description>ThingSet client for .NET</Description>
         <PackageId>ThingSet.Client</PackageId>
         <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
         <PackageTags>iot</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
         <ProjectReference Include="..\ThingSet.Common\ThingSet.Common.csproj" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <None Include="..\..\README.md" Pack="true" PackagePath="\" />
     </ItemGroup>
 
 </Project>
