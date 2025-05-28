@@ -8,6 +8,16 @@
     <TargetFramework>net8.0</TargetFramework>
     <ImplicitUsings>disable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <Authors>Brill Power, Gareth Potter</Authors>
+    <Copyright>Copyright (c) Brill Power 2023-2025</Copyright>
+    <ProjectUrl>https://github.com/Brill-Power/ThingSet.Net</ProjectUrl>
+    <RepositoryUrl>https://github.com/Brill-Power/ThingSet.Net.git</RepositoryUrl>
+    <RepositoryType>git</RepositoryType>
+    <Description>IP transport for .NET ThingSet client</Description>
+    <PackageId>ThingSet.Common.Transports.Ip</PackageId>
+    <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+    <PackageReadmeFile>README.md</PackageReadmeFile>
+    <PackageTags>iot</PackageTags>
   </PropertyGroup>
 
 </Project>
