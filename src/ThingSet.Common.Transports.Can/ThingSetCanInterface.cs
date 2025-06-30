@@ -7,6 +7,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Linq;
 using System.Net.NetworkInformation;
+using System.Runtime.InteropServices;
 using System.Threading;
 using System.Threading.Tasks;
 using SocketCANSharp;
@@ -16,13 +17,14 @@ namespace ThingSet.Common.Transports.Can;
 
 public class ThingSetCanInterface : IDisposable
 {
-    private readonly CanNetworkInterface _canInterface;
-
+    private const int NoBufferSpaceAvailableError = 105;
     public static readonly byte LocalBridge = CanID.LocalBridge;
+    private static readonly TimeSpan MaxErrorDelay = TimeSpan.FromSeconds(30);
 
     private static readonly byte[] MacAddress = new byte[8];
     private static readonly byte[] Zero = new byte[0];
 
+    private readonly CanNetworkInterface _canInterface;
     private readonly RawCanSocket _addressClaimerCanSocket;
 
     protected byte _nodeAddress;
@@ -119,6 +121,7 @@ public class ThingSetCanInterface : IDisposable
             };
             thread.Start();
 
+            TimeSpan delayOnError = TimeSpan.FromMilliseconds(100);
             while (true)
             {
                 byte rand = (byte)(dice.Next(Byte.MaxValue) & 0xff);
@@ -139,7 +142,18 @@ public class ThingSetCanInterface : IDisposable
                 catch (Exception ex)
                 {
                     Console.WriteLine(ex.Message);
-                    await Task.Delay(TimeSpan.FromMilliseconds(100));
+                    int error = Marshal.GetLastPInvokeError();
+                    if (error == NoBufferSpaceAvailableError)
+                    {
+                        // no buffer space available; occurs when no other devices on bus to ack our message
+                        // no point sitting in a tight loop firing off CAN messages
+                        delayOnError *= 2;
+                        if (delayOnError > MaxErrorDelay)
+                        {
+                            delayOnError = MaxErrorDelay;
+                        }
+                    }
+                    await Task.Delay(delayOnError);
                     continue;
                 }
 
