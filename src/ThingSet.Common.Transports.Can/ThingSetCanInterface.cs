@@ -17,7 +17,6 @@ namespace ThingSet.Common.Transports.Can;
 
 public class ThingSetCanInterface : IDisposable
 {
-    private const int NoBufferSpaceAvailableError = 105;
     public static readonly byte LocalBridge = CanID.LocalBridge;
     private static readonly TimeSpan MaxErrorDelay = TimeSpan.FromSeconds(30);
 
@@ -142,16 +141,12 @@ public class ThingSetCanInterface : IDisposable
                 catch (Exception ex)
                 {
                     Console.WriteLine(ex.Message);
-                    int error = Marshal.GetLastPInvokeError();
-                    if (error == NoBufferSpaceAvailableError)
+                    // no buffer space available; occurs when no other devices on bus to ack our message
+                    // no point sitting in a tight loop firing off CAN messages
+                    delayOnError *= 2;
+                    if (delayOnError > MaxErrorDelay)
                     {
-                        // no buffer space available; occurs when no other devices on bus to ack our message
-                        // no point sitting in a tight loop firing off CAN messages
-                        delayOnError *= 2;
-                        if (delayOnError > MaxErrorDelay)
-                        {
-                            delayOnError = MaxErrorDelay;
-                        }
+                        delayOnError = MaxErrorDelay;
                     }
                     await Task.Delay(delayOnError);
                     continue;
