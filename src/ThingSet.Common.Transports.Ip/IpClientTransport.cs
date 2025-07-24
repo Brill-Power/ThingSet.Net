@@ -4,7 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 using System;
-using System.Buffers.Binary;
+using System.Collections.Concurrent;
 using System.Formats.Cbor;
 using System.Net;
 using System.Net.Sockets;
@@ -16,12 +16,16 @@ namespace ThingSet.Common.Transports.Ip;
 
 public class IpClientTransport : IClientTransport
 {
+    private const int MessageSize = 512;
+    private const int MessageTypePosition = 4;
+
     private readonly string _hostname;
     private readonly int _port;
 
     private readonly TcpClient _tcpClient;
     private readonly UdpClient _udpClient;
 
+    private readonly ConcurrentDictionary<IPEndPoint, ReceiveBuffer> _buffersBySender = new ConcurrentDictionary<IPEndPoint, ReceiveBuffer>();
     private readonly Thread _subscriptionThread;
     private bool _runSubscriptionThread = true;
 
@@ -81,14 +85,37 @@ public class IpClientTransport : IClientTransport
         while (_runSubscriptionThread)
         {
             UdpReceiveResult result = await _udpClient.ReceiveAsync();
-            if (result.Buffer[0] == (byte)ThingSetRequest.Report && result.Buffer.Length > 4)
+            MessageType messageType = (MessageType)(result.Buffer[0] & 0xF0);
+            byte sequenceNumber = (byte)(result.Buffer[0] & 0x0F);
+            byte messageNumber = result.Buffer[1];
+            ReceiveBuffer buffer = _buffersBySender.GetOrAdd(result.RemoteEndPoint, _ => new ReceiveBuffer());
+            if (messageType == MessageType.Single || messageType == MessageType.First)
             {
-                ushort len = (ushort)(result.Buffer[1] | (result.Buffer[2] << 8));
-                if (len == result.Buffer.Length - 3)
-                {
-                    ReadOnlyMemory<byte> memory = result.Buffer;
-                    NotifyReport(memory.Slice(3));
-                }
+                buffer.Started = true;
+                buffer.MessageNumber = messageNumber;
+            }
+            else if (buffer.MessageNumber != messageNumber)
+            {
+                buffer.Reset();
+                continue;
+            }
+            else if (!buffer.Started)
+            {
+                buffer.Reset();
+                continue;
+            }
+
+            if (sequenceNumber == (buffer.Sequence++ & 0xF))
+            {
+                buffer.Append(result.Buffer);
+            }
+            if ((messageType == MessageType.Last || messageType == MessageType.Single) &&
+                buffer.Buffer[0] == (byte)ThingSetRequest.Report)
+            {
+                ReadOnlyMemory<byte> memory = buffer.Buffer;
+                var len = memory.Length;
+                NotifyReport(memory.Slice(1, buffer.Position - 1));
+                buffer.Reset();
             }
         }
     }
@@ -98,5 +125,37 @@ public class IpClientTransport : IClientTransport
         CborReader reader = new CborReader(body, CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
         reader.ReadUInt32();
         _callback?.Invoke(body.Slice(body.Length - reader.BytesRemaining));
+    }
+
+    private class ReceiveBuffer
+    {
+        public byte[] Buffer = new byte[32768];
+        public int Position;
+        public byte Sequence;
+        public byte MessageNumber;
+        public bool Started;
+
+        public void Reset()
+        {
+            Position = 0;
+            Sequence = 0;
+            Started = false;
+        }
+
+        public void Append(byte[] buffer)
+        {
+            ReadOnlySpan<byte> source = buffer;
+            Span<byte> destination = Buffer;
+            source.Slice(2).CopyTo(destination.Slice(Position));
+            Position += buffer.Length - 2;
+        }
+    }
+
+    private enum MessageType
+    {
+        First = 0x0 << MessageTypePosition,
+        Consecutive = 0x1 << MessageTypePosition,
+        Last = 0x2 << MessageTypePosition,
+        Single = 0x3 << MessageTypePosition,
     }
 }

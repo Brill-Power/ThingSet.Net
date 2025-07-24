@@ -199,7 +199,7 @@ public class CanClientTransport : CanTransportBase, IClientTransport
                                     ReadOnlyMemory<byte> memory = buffer.Buffer;
                                     if (buffer.Buffer[0] == (byte)ThingSetRequest.Report)
                                     {
-                                        NotifyReport(memory.Slice(1, buffer.Position));
+                                        NotifyReport(memory.Slice(1, buffer.Position - 1));
                                     }
                                     buffer.Reset();
                                 }
