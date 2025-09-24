@@ -17,15 +17,21 @@ namespace ThingSet.Common.Transports.Can;
 public class AddressClaimListener : IAddressClaimListener
 {
     private readonly ThingSetCanInterface _canInterface;
+    private readonly bool _disposeInterface;
 
     private readonly RawCanSocket _peerAddressesHandlerCanSocket;
 
     private readonly Thread _peerAddressesHandlerThread;
     private bool _runPeerAddressesHandler = true;
 
-    public AddressClaimListener(ThingSetCanInterface canInterface)
+    public AddressClaimListener(ThingSetCanInterface canInterface) : this(canInterface, false)
+    {
+    }
+
+    public AddressClaimListener(ThingSetCanInterface canInterface, bool disposeInterface)
     {
         _canInterface = canInterface;
+        _disposeInterface = disposeInterface;
 
         _peerAddressesHandlerCanSocket = new RawCanSocket
         {
@@ -53,6 +59,10 @@ public class AddressClaimListener : IAddressClaimListener
             _peerAddressesHandlerThread.Join(1000);
         }
         _peerAddressesHandlerCanSocket.Dispose();
+        if (_disposeInterface)
+        {
+            _canInterface.Dispose();
+        }
     }
 
     public void Listen()
