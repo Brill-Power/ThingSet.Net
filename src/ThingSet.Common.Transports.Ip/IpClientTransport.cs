@@ -69,6 +69,7 @@ public class IpClientTransport : IClientTransport
     public ValueTask SubscribeAsync(Action<ReadOnlyMemory<byte>> callback)
     {
         _callback = callback;
+        _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, 9002));
         _subscriptionThread.Start();
         return ValueTask.CompletedTask;
