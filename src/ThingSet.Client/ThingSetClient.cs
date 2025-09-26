@@ -36,11 +36,25 @@ public class ThingSetClient : IThingSetClient
     {
     }
 
-    public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider)
+    public ThingSetClient(IClientTransport transport, ulong? targetNodeId) : this(transport, new DefaultThingSetSchemaProvider(), targetNodeId)
+    {
+    }
+
+    public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider) : this(transport, schemaProvider, null)
+    {
+    }
+
+    public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider, ulong? targetNodeId)
     {
         _transport = transport;
         _schemaProvider = schemaProvider;
+        TargetNodeID = targetNodeId;
     }
+
+    /// <summary>
+    /// The target node if this client is forwarding requests to another node.
+    /// </summary>
+    public ulong? TargetNodeID { get; }
 
     /// <summary>
     /// Connects to the ThingSet device.
@@ -151,17 +165,29 @@ public class ThingSetClient : IThingSetClient
     {
         byte[] buffer = new byte[4095];
         Span<byte> span = buffer;
-        buffer[0] = (byte)action;
+        int length = 0;
+        if (TargetNodeID.HasValue)
+        {
+            // prefix the request with node to forward to
+            span[0] = (byte)ThingSetRequest.Forward;
+            CborWriter w = new CborWriter(CborConformanceMode.Lax);
+            w.WriteTextString($"{TargetNodeID.Value:x}");
+            w.Encode(span.Slice(1));
+            span = span.Slice(1 + w.BytesWritten);
+            length = 1 + w.BytesWritten;
+        }
+        span[0] = (byte)action;
         CborWriter writer = new CborWriter(CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
         write(writer);
         writer.Encode(span.Slice(1));
+        length += 1 + writer.BytesWritten;
         if (!Monitor.TryEnter(_lock, LockTimeout))
         {
             throw new TimeoutException("Timed out trying to send request.");
         }
         try
         {
-            if (!_transport.Write(buffer, 1 + writer.BytesWritten))
+            if (!_transport.Write(buffer, length))
             {
                 throw new IOException("Could not connect to ThingSet endpoint.");
             }
