@@ -85,38 +85,44 @@ public class IpClientTransport : IClientTransport
     {
         while (_runSubscriptionThread)
         {
-            UdpReceiveResult result = await _udpClient.ReceiveAsync();
-            MessageType messageType = (MessageType)(result.Buffer[0] & 0xF0);
-            byte sequenceNumber = (byte)(result.Buffer[0] & 0x0F);
-            byte messageNumber = result.Buffer[1];
-            ReceiveBuffer buffer = _buffersBySender.GetOrAdd(result.RemoteEndPoint, _ => new ReceiveBuffer());
-            if (messageType == MessageType.Single || messageType == MessageType.First)
+            try
             {
-                buffer.Started = true;
-                buffer.MessageNumber = messageNumber;
-            }
-            else if (buffer.MessageNumber != messageNumber)
-            {
-                buffer.Reset();
-                continue;
-            }
-            else if (!buffer.Started)
-            {
-                buffer.Reset();
-                continue;
-            }
+                UdpReceiveResult result = await _udpClient.ReceiveAsync();
+                MessageType messageType = (MessageType)(result.Buffer[0] & 0xF0);
+                byte sequenceNumber = (byte)(result.Buffer[0] & 0x0F);
+                byte messageNumber = result.Buffer[1];
+                ReceiveBuffer buffer = _buffersBySender.GetOrAdd(result.RemoteEndPoint, _ => new ReceiveBuffer());
+                if (messageType == MessageType.Single || messageType == MessageType.First)
+                {
+                    buffer.Started = true;
+                    buffer.MessageNumber = messageNumber;
+                }
+                else if (buffer.MessageNumber != messageNumber)
+                {
+                    buffer.Reset();
+                    continue;
+                }
+                else if (!buffer.Started)
+                {
+                    buffer.Reset();
+                    continue;
+                }
 
-            if (sequenceNumber == (buffer.Sequence++ & 0xF))
-            {
-                buffer.Append(result.Buffer);
+                if (sequenceNumber == (buffer.Sequence++ & 0xF))
+                {
+                    buffer.Append(result.Buffer);
+                }
+                if ((messageType == MessageType.Last || messageType == MessageType.Single) &&
+                    buffer.Buffer[0] == (byte)ThingSetRequest.Report)
+                {
+                    ReadOnlyMemory<byte> memory = buffer.Buffer;
+                    var len = memory.Length;
+                    NotifyReport(memory.Slice(1, buffer.Position - 1));
+                    buffer.Reset();
+                }
             }
-            if ((messageType == MessageType.Last || messageType == MessageType.Single) &&
-                buffer.Buffer[0] == (byte)ThingSetRequest.Report)
+            catch (SocketException)
             {
-                ReadOnlyMemory<byte> memory = buffer.Buffer;
-                var len = memory.Length;
-                NotifyReport(memory.Slice(1, buffer.Position - 1));
-                buffer.Reset();
             }
         }
     }

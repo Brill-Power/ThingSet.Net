@@ -19,6 +19,7 @@
 
     <ItemGroup>
         <ProjectReference Include="../../src/ThingSet.Common/ThingSet.Common.csproj" />
+        <ProjectReference Include="../../src/ThingSet.Common.Transports.Ip/ThingSet.Common.Transports.Ip.csproj" />
     </ItemGroup>
 
     <ItemGroup>
