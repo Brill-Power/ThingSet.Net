@@ -15,6 +15,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Test", "Test", "{CCD2CE5A-B
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThingSet.Test", "..\test\ThingSet.Test\ThingSet.Test.csproj", "{85D124D2-F684-491C-9790-C6B7CBF9D4F8}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "ThingSet.Server", "ThingSet.Server\ThingSet.Server.csproj", "{E05B4B2F-6A55-4261-98ED-EC16B529B766}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -41,6 +43,10 @@ Global
 		{85D124D2-F684-491C-9790-C6B7CBF9D4F8}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{85D124D2-F684-491C-9790-C6B7CBF9D4F8}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{85D124D2-F684-491C-9790-C6B7CBF9D4F8}.Release|Any CPU.Build.0 = Release|Any CPU
+		{E05B4B2F-6A55-4261-98ED-EC16B529B766}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{E05B4B2F-6A55-4261-98ED-EC16B529B766}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{E05B4B2F-6A55-4261-98ED-EC16B529B766}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{E05B4B2F-6A55-4261-98ED-EC16B529B766}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE

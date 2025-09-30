@@ -5,6 +5,7 @@
  */
 using System;
 using System.Collections.ObjectModel;
+using ThingSet.Common;
 using ThingSet.Common.Protocols;
 
 namespace ThingSet.Client.Schema;

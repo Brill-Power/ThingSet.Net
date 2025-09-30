@@ -197,7 +197,7 @@ public class CanClientTransport : CanTransportBase, IClientTransport
                                 if (type == MultiFrameMessageType.Single || type == MultiFrameMessageType.Last)
                                 {
                                     ReadOnlyMemory<byte> memory = buffer.Buffer;
-                                    if (buffer.Buffer[0] == (byte)ThingSetRequest.Report)
+                                    if (buffer.Buffer[0] == (byte)ThingSetBinaryRequestType.Report)
                                     {
                                         NotifyReport(memory.Slice(1, buffer.Position - 1));
                                     }

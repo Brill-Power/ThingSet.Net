@@ -5,6 +5,7 @@
  */
 using System;
 using System.Collections.Concurrent;
+using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using SocketCANSharp;
@@ -27,7 +28,7 @@ public class CanServerTransport : CanTransportBase, IServerTransport
 
     private bool _runPeerSocketHandlers = true;
 
-    private Func<byte, byte[], byte[]>? _messageCallback;
+    private Func<object, Memory<byte>, Memory<byte>>? _messageCallback;
 
     public CanServerTransport(ThingSetCanInterface canInterface) : base(canInterface, leaveOpen: false)
     {
@@ -40,7 +41,9 @@ public class CanServerTransport : CanTransportBase, IServerTransport
         _addressClaimListener.AddressClaimed += OnAddressClaimed;
     }
 
-    public ValueTask ListenAsync(Func<byte, byte[], byte[]> callback)
+    public event EventHandler<ErrorEventArgs>? Error;
+
+    public ValueTask ListenAsync(Func<object, Memory<byte>, Memory<byte>> callback)
     {
         _addressClaimListener.Listen();
 
@@ -120,6 +123,7 @@ public class CanServerTransport : CanTransportBase, IServerTransport
 
     private int WriteFdFrame(uint canId, byte[] buffer)
     {
+
         CanFdFrame frame = new CanFdFrame
         {
             CanId = canId,
@@ -154,8 +158,16 @@ public class CanServerTransport : CanTransportBase, IServerTransport
                 int read = socket.Read(buffer);
                 if (read > 0 && _messageCallback is not null)
                 {
-                    byte[] response = _messageCallback(peerId, buffer);
-                    socket.Write(response);
+                    try
+                    {
+                        Memory<byte> memory = buffer;
+                        Memory<byte> response = _messageCallback(peerId, memory.Slice(0, read));
+                        socket.Write(response.ToArray());
+                    }
+                    catch (Exception ex)
+                    {
+                        Error?.Invoke(this, new ErrorEventArgs(ex));
+                    }
                 }
             }
         }
