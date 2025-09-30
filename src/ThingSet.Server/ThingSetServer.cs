@@ -8,6 +8,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Formats.Cbor;
 using System.IO;
 using System.Linq;
+using System.Reflection;
 using System.Threading.Tasks;
 using ThingSet.Common.Nodes;
 using ThingSet.Common.Protocols;
@@ -16,7 +17,7 @@ using ThingSet.Common.Transports;
 
 namespace ThingSet.Server;
 
-public class ThingSetServer
+public class ThingSetServer : IDisposable
 {
     private readonly IServerTransport _transport;
 
@@ -45,40 +46,77 @@ public class ThingSetServer
         {
             context = new ThingSetBinaryRequestContext(request);
         }
-
-        if (context.IsGet)
+        if (context.HasValidEndpoint)
         {
-            length = HandleGet(context, responseMem);
-        }
-        else if (context.IsFetch)
-        {
-            length = HandleFetch(context, responseMem);
-        }
-        else if (context.IsUpdate)
-        {
-            length = HandleUpdate(context, responseMem);
-        }
-        else if (context.IsExec)
-        {
-            length = HandleExec(context, responseMem);
+            if (context.IsGet)
+            {
+                length = HandleGet(context, responseMem);
+            }
+            else if (context.IsFetch)
+            {
+                length = HandleFetch(context, responseMem);
+            }
+            else if (context.IsUpdate)
+            {
+                length = HandleUpdate(context, responseMem);
+            }
+            else if (context.IsExec)
+            {
+                length = HandleExec(context, responseMem);
+            }
+            else
+            {
+                response[0] = (byte)ThingSetStatus.BadRequest;
+                length = 1;
+            }
         }
         else
         {
-            response[0] = (byte)ThingSetStatus.BadRequest;
+            response[0] = (byte)ThingSetStatus.NotFound;
             length = 1;
         }
         return responseMem.Slice(0, length);
-        // ThingSetResponse response = context.Handle();
-        // byte[] buffer = new byte[response.Buffer.Length + 1];
-        // buffer[0] = (byte)response.Status;
-        // Buffer.BlockCopy(response.Buffer, 0, buffer, 1, response.Buffer.Length);
-        // Console.WriteLine($"Sent response of {buffer.Length} bytes");
-        // return buffer;
     }
 
     private int HandleExec(ThingSetRequestContextBase context, Memory<byte> response)
     {
-        throw new NotImplementedException();
+        Span<byte> responseSpan = response.Span;
+        if ((context.Endpoint?.Type.IsFunction ?? false) &&
+            context.Endpoint is IThingSetFunction function)
+        {
+            CborReader reader = new CborReader(context.RequestBody, CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
+            if (CborDeserialiser.Read(reader) is object[] args)
+            {
+                ParameterInfo[] parameters = function.Function.Method.GetParameters();
+                if (args.Length != parameters.Length)
+                {
+                    responseSpan[0] = (byte)ThingSetStatus.BadRequest;
+                    return 1;
+                }
+
+                for (int i = 0; i < args.Length; i++)
+                {
+                    args[i] = Convert.ChangeType(args[i], parameters[i].ParameterType);
+                }
+                responseSpan[0] = (byte)ThingSetStatus.Changed;
+                object? result = function.Function.DynamicInvoke(args);
+                CborWriter writer = new CborWriter(CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
+                writer.WriteNull();
+                CborSerialiser.Write(writer, result);
+                writer.Encode(responseSpan.Slice(1));
+                return writer.BytesWritten + 1;
+            }
+            else
+            {
+                responseSpan[0] = (byte)ThingSetStatus.BadRequest;
+                return 1;
+            }
+        }
+        else
+        {
+            responseSpan[0] = (byte)ThingSetStatus.MethodNotAllowed;
+            return 1;
+        }
     }
 
     private int HandleUpdate(ThingSetRequestContextBase context, Memory<byte> response)
@@ -88,43 +126,35 @@ public class ThingSetServer
 
     private int HandleFetch(ThingSetRequestContextBase context, Memory<byte> response)
     {
-        if (context.HasValidEndpoint)
+        Span<byte> responseSpan = response.Span;
+        responseSpan[0] = (byte)ThingSetStatus.Content;
+        CborWriter writer = new CborWriter(CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
+        writer.WriteNull();
+        CborReader reader = new CborReader(context.RequestBody, CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
+        if (reader.PeekState() == CborReaderState.Null)
         {
-            Span<byte> responseSpan = response.Span;
-            responseSpan[0] = (byte)ThingSetStatus.Content;
-            CborWriter writer = new CborWriter(CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
-            writer.WriteNull();
-            CborReader reader = new CborReader(context.RequestBody, CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
-            if (reader.PeekState() == CborReaderState.Null)
+            if (context.Endpoint is ThingSetParentNode parent)
             {
-                if (context.Endpoint is ThingSetParentNode parent)
+                if (context.UseIds)
                 {
-                    if (context.UseIds)
-                    {
-                        CborSerialiser.Write(writer, parent.Children.Select(c => c.Id).ToArray());
-                    }
-                    else
-                    {
-                        CborSerialiser.Write(writer, parent.Children.Select(c => c.Name).ToArray());
-                    }
-                    writer.Encode(responseSpan.Slice(1));
-                    return writer.BytesWritten + 1;
+                    CborSerialiser.Write(writer, parent.Children.Select(c => c.Id).ToArray());
                 }
                 else
                 {
-                    responseSpan[0] = (byte)ThingSetStatus.BadRequest;
-                    return 1;
+                    CborSerialiser.Write(writer, parent.Children.Select(c => c.Name).ToArray());
                 }
+                writer.Encode(responseSpan.Slice(1));
+                return writer.BytesWritten + 1;
             }
             else
             {
-                responseSpan[0] = (byte)ThingSetStatus.NotImplemented;
+                responseSpan[0] = (byte)ThingSetStatus.BadRequest;
                 return 1;
             }
         }
         else
         {
-            response.Span[0] = (byte)ThingSetStatus.NotFound;
+            responseSpan[0] = (byte)ThingSetStatus.NotImplemented;
             return 1;
         }
     }
@@ -132,6 +162,11 @@ public class ThingSetServer
     private int HandleGet(ThingSetRequestContextBase context, Memory<byte> response)
     {
         throw new NotImplementedException();
+    }
+
+    public void Dispose()
+    {
+        _transport.Dispose();
     }
 }
 

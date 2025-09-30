@@ -9,7 +9,12 @@ using System.Linq;
 
 namespace ThingSet.Common.Nodes;
 
-public class ThingSetFunction<TDelegate> : ThingSetParentNode
+public interface IThingSetFunction
+{
+    public Delegate Function { get; }
+}
+
+public class ThingSetFunction<TDelegate> : ThingSetParentNode, IThingSetFunction
     where TDelegate : Delegate
 {
     private readonly TDelegate _function;
@@ -19,6 +24,8 @@ public class ThingSetFunction<TDelegate> : ThingSetParentNode
         _function = function;
         Type = ThingSetType.GetType(typeof(TDelegate));
     }
+
+    public Delegate Function => _function;
 
     public override ThingSetType Type { get; }
 

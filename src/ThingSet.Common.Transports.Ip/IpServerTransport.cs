@@ -9,6 +9,7 @@ using System.Net;
 using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
+using ThingSet.Common.Protocols;
 using static ThingSet.Common.Transports.Ip.Protocol;
 
 namespace ThingSet.Common.Transports.Ip;
@@ -26,8 +27,8 @@ public class IpServerTransport : IServerTransport
     private readonly TcpListener _listener;
     private readonly UdpClient _udpClient;
 
+    private readonly CancellationTokenSource _listenerCanceller = new CancellationTokenSource();
     private readonly Thread _listenThread;
-    private bool _runListener = true;
 
     private byte _messageNumber;
 
@@ -55,6 +56,8 @@ public class IpServerTransport : IServerTransport
 
     public void Dispose()
     {
+        _listenerCanceller.Cancel();
+        _listener.Stop();
         _listener.Dispose();
         _udpClient.Dispose();
     }
@@ -103,24 +106,42 @@ public class IpServerTransport : IServerTransport
     {
         _listener.Start();
 
-        while (_runListener)
+        while (!_listenerCanceller.IsCancellationRequested)
         {
-            TcpClient client = await _listener.AcceptTcpClientAsync();
-            Task.Run(() => HandleRequest(client)).GetAwaiter();
+            try
+            {
+                TcpClient client = await _listener.AcceptTcpClientAsync(_listenerCanceller.Token);
+                Task.Run(() => HandleRequest(client, _listenerCanceller.Token)).GetAwaiter();
+            }
+            catch (OperationCanceledException)
+            {
+            }
         }
     }
 
-    private async Task HandleRequest(TcpClient client)
+    private async Task HandleRequest(TcpClient client, CancellationToken cancellationToken)
     {
         Memory<byte> buffer = new byte[8192];
         using (client)
         {
             try
             {
-                NetworkStream stream = client.GetStream();
-                int read = await stream.ReadAsync(buffer);
-                Memory<byte> response = _callback!(client.Client.RemoteEndPoint!, buffer.Slice(0, read));
-                await stream.WriteAsync(response);
+                await using NetworkStream stream = client.GetStream();
+                int read;
+                while ((read = await stream.ReadAsync(buffer, cancellationToken)) != 0)
+                {
+                    Memory<byte> response;
+                    try
+                    {
+                        response = _callback!(client.Client.RemoteEndPoint!, buffer.Slice(0, read));
+                    }
+                    catch (Exception ex)
+                    {
+                        Error?.Invoke(this, new ErrorEventArgs(ex));
+                        response = new byte[] { (byte)ThingSetStatus.InternalServerError };
+                    }
+                    await stream.WriteAsync(response, cancellationToken);
+                }
             }
             catch (Exception ex)
             {
