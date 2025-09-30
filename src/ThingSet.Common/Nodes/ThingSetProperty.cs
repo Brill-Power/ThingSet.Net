@@ -5,7 +5,7 @@
  */
 namespace ThingSet.Common.Nodes;
 
-public class ThingSetProperty<TValue> : ThingSetNode
+public class ThingSetProperty<TValue> : ThingSetNode, IThingSetValue
 {
     public ThingSetProperty(ushort id, string name) : base(id, name)
     {
@@ -14,4 +14,10 @@ public class ThingSetProperty<TValue> : ThingSetNode
     public TValue? Value { get; set; }
 
     public override ThingSetType Type => ThingSetType.GetType(typeof(TValue));
+
+    object? IThingSetValue.Value
+    {
+        get { return Value; }
+        set { Value = (TValue?)value; }
+    }
 }

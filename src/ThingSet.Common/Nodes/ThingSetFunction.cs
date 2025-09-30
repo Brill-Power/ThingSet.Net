@@ -9,11 +9,6 @@ using System.Linq;
 
 namespace ThingSet.Common.Nodes;
 
-public interface IThingSetFunction
-{
-    public Delegate Function { get; }
-}
-
 public class ThingSetFunction<TDelegate> : ThingSetParentNode, IThingSetFunction
     where TDelegate : Delegate
 {

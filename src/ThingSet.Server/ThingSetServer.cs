@@ -4,6 +4,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 using System;
+using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Formats.Cbor;
 using System.IO;
@@ -161,7 +162,48 @@ public class ThingSetServer : IDisposable
 
     private int HandleGet(ThingSetRequestContextBase context, Memory<byte> response)
     {
-        throw new NotImplementedException();
+        Span<byte> responseSpan = response.Span;
+        responseSpan[0] = (byte)ThingSetStatus.Content;
+        CborWriter writer = new CborWriter(CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
+        writer.WriteNull();
+        if (context.Endpoint is ThingSetParentNode parent)
+        {
+            if (context.UseIds)
+            {
+                CborSerialiser.Write(writer, GetKeyValuePairs(n => n.Id, parent.Children));
+            }
+            else
+            {
+                CborSerialiser.Write(writer, GetKeyValuePairs(n => n.Name, parent.Children));
+            }
+            writer.Encode(responseSpan.Slice(1));
+            return 1 + writer.BytesWritten;
+        }
+        else if (context.Endpoint is IThingSetValue value)
+        {
+            CborSerialiser.Write(writer, value.Value);
+            writer.Encode(responseSpan.Slice(1));
+            return 1 + writer.BytesWritten;
+        }
+        else
+        {
+            responseSpan[0] = (byte)ThingSetStatus.UnsupportedFormat;
+            return 1;
+        }
+    }
+
+    private Dictionary<TKey, object?> GetKeyValuePairs<TKey>(Func<ThingSetNode, TKey> keySelector, IEnumerable<ThingSetNode> nodes)
+        where TKey : IEquatable<TKey>
+    {
+        Dictionary<TKey, object?> keyValuePairs = new Dictionary<TKey, object?>();
+        foreach (ThingSetNode node in nodes)
+        {
+            if (node is IThingSetValue value)
+            {
+                keyValuePairs.Add(keySelector(node), value.Value);
+            }
+        }
+        return keyValuePairs;
     }
 
     public void Dispose()

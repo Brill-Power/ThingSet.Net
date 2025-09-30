@@ -15,9 +15,29 @@ namespace ThingSet.Test;
 public class TestClientServer
 {
     [Test]
-    public async Task TestFunction()
+    public async Task TestProperty()
     {
         ThingSetProperty<float> voltage = new ThingSetProperty<float>(0x200, "voltage");
+        voltage.Value = 24.0f;
+
+        using (IpClientTransport clientTransport = new IpClientTransport("127.0.0.1"))
+        using (IpServerTransport serverTransport = new IpServerTransport(IPAddress.Loopback))
+        using (ThingSetServer server = new ThingSetServer(serverTransport))
+        using (ThingSetClient client = new ThingSetClient(clientTransport))
+        {
+            await server.ListenAsync();
+            await Task.Delay(10);
+            await client.ConnectAsync();
+            object? result = client.Get(0x200);
+            Assert.That(result, Is.Not.Null);
+            Assert.That(result, Is.TypeOf<float>());
+            Assert.That(result, Is.EqualTo(24.0f));
+        }
+    }
+
+    [Test]
+    public async Task TestFunction()
+    {
         var function = ThingSetFunction.Create(0x500, "xTest", (int x, int y) => x + y);
 
         using (IpClientTransport clientTransport = new IpClientTransport("127.0.0.1"))
