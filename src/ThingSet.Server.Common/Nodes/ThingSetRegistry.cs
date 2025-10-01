@@ -9,9 +9,10 @@ using System.Collections.Generic;
 using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Json.Pointer;
+using ThingSet.Common;
 using ThingSet.Common.Protocols;
 
-namespace ThingSet.Common.Nodes;
+namespace ThingSet.Server.Common.Nodes;
 
 public class ThingSetRegistry
 {

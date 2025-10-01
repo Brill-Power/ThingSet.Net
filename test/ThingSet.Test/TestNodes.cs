@@ -5,7 +5,7 @@
  */
 using System;
 using System.Linq;
-using ThingSet.Common.Nodes;
+using ThingSet.Server.Common.Nodes;
 
 namespace ThingSet.Test;
 

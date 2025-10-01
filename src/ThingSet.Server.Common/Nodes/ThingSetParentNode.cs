@@ -5,7 +5,7 @@
  */
 using System.Collections.Generic;
 
-namespace ThingSet.Common.Nodes;
+namespace ThingSet.Server.Common.Nodes;
 
 public abstract class ThingSetParentNode : ThingSetNode, IThingSetParentNode
 {

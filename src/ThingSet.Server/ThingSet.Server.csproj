@@ -1,6 +1,7 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
 
   <ItemGroup>
+    <ProjectReference Include="../ThingSet.Server.Common/ThingSet.Server.Common.csproj" />
     <ProjectReference Include="..\ThingSet.Common\ThingSet.Common.csproj" />
   </ItemGroup>
 

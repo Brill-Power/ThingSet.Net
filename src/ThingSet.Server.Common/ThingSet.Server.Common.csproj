@@ -1,0 +1,30 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+    <PropertyGroup>
+        <TargetFrameworks>net8.0</TargetFrameworks>
+        <ImplicitUsings>disable</ImplicitUsings>
+        <Nullable>enable</Nullable>
+        <Authors>Brill Power, Gareth Potter</Authors>
+        <Copyright>Copyright (c) Brill Power 2025</Copyright>
+        <ProjectUrl>https://github.com/Brill-Power/ThingSet.Net</ProjectUrl>
+        <RepositoryUrl>https://github.com/Brill-Power/ThingSet.Net.git</RepositoryUrl>
+        <RepositoryType>git</RepositoryType>
+        <PackageId>ThingSet.Server.Common</PackageId>
+        <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
+        <PackageReadmeFile>README.md</PackageReadmeFile>
+        <PackageTags>iot</PackageTags>
+    </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="JsonPointer.Net" Version="5.3.1" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <None Include="..\..\README.md" Pack="true" PackagePath="\" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="../ThingSet.Common/ThingSet.Common.csproj" />
+  </ItemGroup>
+
+</Project>

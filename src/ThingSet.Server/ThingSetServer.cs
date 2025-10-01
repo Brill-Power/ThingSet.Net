@@ -12,7 +12,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading.Tasks;
-using ThingSet.Common.Nodes;
+using ThingSet.Server.Common.Nodes;
 using ThingSet.Common.Protocols;
 using ThingSet.Common.Protocols.Binary;
 using ThingSet.Common.Transports;

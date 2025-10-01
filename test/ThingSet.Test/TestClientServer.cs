@@ -9,7 +9,7 @@ using System.Threading.Tasks;
 using ThingSet.Client;
 using ThingSet.Client.Schema;
 using ThingSet.Common;
-using ThingSet.Common.Nodes;
+using ThingSet.Server.Common.Nodes;
 using ThingSet.Common.Transports.Ip;
 using ThingSet.Server;
 

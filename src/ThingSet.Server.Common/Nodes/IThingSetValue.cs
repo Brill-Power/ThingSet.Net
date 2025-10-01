@@ -3,7 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-namespace ThingSet.Common.Nodes;
+namespace ThingSet.Server.Common.Nodes;
 
 public interface IThingSetValue
 {

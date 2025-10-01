@@ -3,7 +3,9 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-namespace ThingSet.Common.Nodes;
+using ThingSet.Common;
+
+namespace ThingSet.Server.Common.Nodes;
 
 public abstract class ThingSetNode
 {

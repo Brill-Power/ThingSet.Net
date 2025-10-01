@@ -5,7 +5,7 @@
  */
 using System;
 
-namespace ThingSet.Common.Nodes;
+namespace ThingSet.Server.Common.Nodes;
 
 public interface IThingSetFunction
 {

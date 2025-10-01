@@ -6,8 +6,9 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using ThingSet.Common;
 
-namespace ThingSet.Common.Nodes;
+namespace ThingSet.Server.Common.Nodes;
 
 public class ThingSetFunction<TDelegate> : ThingSetNode, IThingSetParentNode, IThingSetFunction
     where TDelegate : Delegate
