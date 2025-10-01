@@ -128,7 +128,62 @@ public class ThingSetServer : IDisposable
 
     private int HandleUpdate(ThingSetRequestContextBase context, Memory<byte> response)
     {
-        throw new NotImplementedException();
+        Span<byte> responseSpan = response.Span;
+        if (context.Endpoint is IThingSetParentNode parent)
+        {
+            CborReader reader = new CborReader(context.RequestBody, CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
+            if (CborDeserialiser.Read(reader) is Dictionary<object, object?> map)
+            {
+                foreach (object key in map.Keys)
+                {
+                    if (key is string path)
+                    {
+                        ThingSetNode? found = null;
+                        foreach (ThingSetNode child in parent.Children)
+                        {
+                            if (child.Name == path)
+                            {
+                                found = child;
+                                break;
+                            }
+                        }
+
+                        if (found == null)
+                        {
+                            responseSpan[0] = (byte)ThingSetStatus.NotFound;
+                            return 1;
+                        }
+
+                        if (found is not IThingSetValue value)
+                        {
+                            responseSpan[0] = (byte)ThingSetStatus.BadRequest;
+                            return 1;
+                        }
+
+                        try
+                        {
+                            value.Value = Convert.ChangeType(map[key], value.ValueType);
+                            responseSpan[0] = (byte)ThingSetStatus.Changed;
+                            responseSpan[1] = 0xF6; // null
+                            responseSpan[2] = 0xF6;
+                            return 3;
+                        }
+                        catch (Exception)
+                        {
+                            break;
+                        }
+                    }
+                    else
+                    {
+                        responseSpan[0] = (byte)ThingSetStatus.BadRequest;
+                        return 1;
+                    }
+                }
+            }
+        }
+
+        responseSpan[0] = (byte)ThingSetStatus.BadRequest;
+        return 1;
     }
 
     private int HandleFetch(ThingSetRequestContextBase context, Memory<byte> response)

@@ -40,6 +40,9 @@ public class TestClientServer
             Assert.That(result, Is.Not.Null);
             Assert.That(result, Is.TypeOf<float>());
             Assert.That(result, Is.EqualTo(24.0f));
+
+            client.Update("voltage", 25.0f);
+            Assert.That(voltage.Value, Is.EqualTo(25.0f));
         }
     }
 

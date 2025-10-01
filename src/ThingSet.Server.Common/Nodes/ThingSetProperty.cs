@@ -3,6 +3,7 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
+using System;
 using ThingSet.Common;
 
 namespace ThingSet.Server.Common.Nodes;
@@ -12,6 +13,8 @@ public class ThingSetProperty<TValue> : ThingSetNode, IThingSetValue
     public ThingSetProperty(ushort id, string name, ushort parentId) : base(id, name, parentId)
     {
     }
+
+    public Type ValueType => typeof(TValue);
 
     public TValue? Value { get; set; }
 
