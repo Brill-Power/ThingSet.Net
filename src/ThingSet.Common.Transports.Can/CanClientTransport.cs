@@ -11,7 +11,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using SocketCANSharp;
 using SocketCANSharp.Network;
-using ThingSet.Common.Protocols.Binary;
 
 namespace ThingSet.Common.Transports.Can;
 
@@ -19,12 +18,15 @@ namespace ThingSet.Common.Transports.Can;
 /// CAN transport for ThingSet clients. Supports request/response and
 /// asynchronous reports.
 /// </summary>
-public class CanClientTransport : CanTransportBase, IClientTransport
+public class CanClientTransport : ClientTransportBase<byte>, IClientTransport
 {
     private static readonly TimeSpan ExceptionBackoffInterval = TimeSpan.FromSeconds(5);
     private const int ExceptionThreshold = 12;
 
     private delegate int CanFrameReader(out uint canId, out byte length, out byte[] data);
+
+    private readonly ThingSetCanInterface _canInterface;
+    private bool _disposeInterface;
 
     private readonly IsoTpCanSocket _requestResponseSocket;
     private readonly RawCanSocket _subscriptionSocket;
@@ -34,23 +36,21 @@ public class CanClientTransport : CanTransportBase, IClientTransport
     private readonly byte _destinationBridge;
     private readonly byte _destinationNodeAddress;
 
-    private readonly Dictionary<byte, ReceiveBuffer> _buffersByNodeAddress = new Dictionary<byte, ReceiveBuffer>();
-
-    private readonly Thread _subscriptionThread;
-    private bool _runSubscriptionThread = true;
-
-    private Action<ReadOnlyMemory<byte>>? _callback;
+    private readonly CanReportParser _reportParser = new CanReportParser();
 
     public CanClientTransport(ThingSetCanInterface canInterface, byte destinationNodeAddress, bool leaveOpen) : this(canInterface, CanID.LocalBridge, destinationNodeAddress, leaveOpen)
     {
     }
 
-    public CanClientTransport(ThingSetCanInterface canInterface, byte destinationBridge, byte destinationNodeAddress, bool leaveOpen) : base(canInterface, leaveOpen)
+    public CanClientTransport(ThingSetCanInterface canInterface, byte destinationBridge, byte destinationNodeAddress, bool leaveOpen)
     {
+        _canInterface = canInterface;
+        _disposeInterface = !leaveOpen;
+
         _destinationBridge = destinationBridge;
         _destinationNodeAddress = destinationNodeAddress;
 
-        _requestResponseSocket = CreateIsoTpCanSocket(canInterface.IsFdMode);
+        _requestResponseSocket = IsoTpCanSocketFactory.CreateIsoTpCanSocket(canInterface.IsFdMode);
         _subscriptionSocket = new RawCanSocket
         {
             CanFilters = new[]
@@ -63,15 +63,11 @@ public class CanClientTransport : CanTransportBase, IClientTransport
         };
 
         _canFrameReader = canInterface.IsFdMode ? ReadCanFdFrame : ReadCanFrame;
-
-        _subscriptionThread = new Thread(RunSubscriptionThread)
-        {
-            IsBackground = true,
-            Name = $"Subscription {_destinationNodeAddress:x}",
-        };
     }
 
-    public ValueTask ConnectAsync()
+    protected override string Address => $"{_destinationNodeAddress:x}";
+
+    public override ValueTask ConnectAsync()
     {
         _requestResponseSocket.Bind(_canInterface.Interface,
             txId: CanID.CreateCanID(MessageType.RequestResponse, MessagePriority.Channel, _destinationBridge, _canInterface.NodeAddress, _destinationNodeAddress),
@@ -82,29 +78,20 @@ public class CanClientTransport : CanTransportBase, IClientTransport
         return ValueTask.CompletedTask;
     }
 
-    public ValueTask SubscribeAsync(Action<ReadOnlyMemory<byte>> callback)
+    protected override ValueTask SubscribeAsync()
     {
-        if (_callback is not null)
-        {
-            throw new InvalidOperationException("There is already a subscription established.");
-        }
-
-        _callback = callback;
-
         Console.WriteLine("Binding subscription socket");
         _subscriptionSocket.Bind(_canInterface.Interface);
-        _subscriptionThread.Start();
-
         return ValueTask.CompletedTask;
     }
 
-    public bool Write(byte[] buffer, int length)
+    public override bool Write(byte[] buffer, int length)
     {
         int written = LibcNativeMethods.Write(_requestResponseSocket.SafeHandle, buffer, length);
         return written == length;
     }
 
-    public int Read(byte[] buffer)
+    public override int Read(byte[] buffer)
     {
         try
         {
@@ -119,14 +106,12 @@ public class CanClientTransport : CanTransportBase, IClientTransport
 
     protected override void Dispose(bool disposing)
     {
-        base.Dispose(disposing);
-        _runSubscriptionThread = false;
-        if (_subscriptionThread.IsAlive)
-        {
-            _subscriptionThread.Join(1000);
-        }
         _subscriptionSocket.Dispose();
         _requestResponseSocket.Dispose();
+        if (_disposeInterface)
+        {
+            _canInterface.Dispose();
+        }
     }
 
     private int ReadCanFrame(out uint canId, out byte length, out byte[] data)
@@ -147,116 +132,90 @@ public class CanClientTransport : CanTransportBase, IClientTransport
         return read;
     }
 
-    private void RunSubscriptionThread()
+    protected override ValueTask HandleIncomingPublicationsAsync()
     {
-        while (_runSubscriptionThread)
+        List<SocketCanException> exceptions = new List<SocketCanException>();
+        try
         {
-            List<SocketCanException> exceptions = new List<SocketCanException>();
-            try
+            int read = _canFrameReader(out uint canId, out byte length, out byte[] data);
+            if (read > 0)
             {
-                int read = _canFrameReader(out uint canId, out byte length, out byte[] data);
-                if (read > 0)
+                exceptions.Clear();
+                switch (CanID.GetType(canId))
                 {
-                    exceptions.Clear();
-                    switch (CanID.GetType(canId))
-                    {
-                        case MessageType.SingleFrameReport:
-                            NotifyItem(canId, data);
-                            break;
-                        case MessageType.MultiFrameReport:
-                            byte source = CanID.GetSource(canId);
-                            byte messageNumber = CanID.GetMessageNumber(canId);
-                            byte sequence = CanID.GetSequenceNumber(canId);
-                            if (!_buffersByNodeAddress.TryGetValue(source, out ReceiveBuffer? buffer))
-                            {
-                                _buffersByNodeAddress[source] = buffer = new ReceiveBuffer();
-                            }
-                            MultiFrameMessageType type = CanID.GetMultiFrameMessageType(canId);
-                            if (type == MultiFrameMessageType.Single || type == MultiFrameMessageType.First)
-                            {
-                                buffer.Started = true;
-                                buffer.MessageNumber = messageNumber;
-                            }
-                            else if (buffer.MessageNumber != messageNumber)
-                            {
-                                buffer.Reset();
-                                continue;
-                            }
-                            else if (!buffer.Started)
-                            {
-                                buffer.Reset();
-                                continue;
-                            }
-
-                            if (sequence == (buffer.Sequence++ & 0xf))
-                            {
-                                ReadOnlySpan<byte> span = data;
-                                Span<byte> target = buffer.Buffer;
-                                span.CopyTo(target.Slice(buffer.Position));
-                                buffer.Position += length;
-                                if (type == MultiFrameMessageType.Single || type == MultiFrameMessageType.Last)
-                                {
-                                    ReadOnlyMemory<byte> memory = buffer.Buffer;
-                                    if (buffer.Buffer[0] == (byte)ThingSetRequest.Report)
-                                    {
-                                        NotifyReport(memory.Slice(1, buffer.Position - 1));
-                                    }
-                                    buffer.Reset();
-                                }
-                            }
-                            else
-                            {
-                                // invalid sequence; reset
-                            }
-                            break;
-                    }
+                    case MessageType.SingleFrameReport:
+                        NotifyControl(canId, data);
+                        break;
+                    case MessageType.MultiFrameReport:
+                        MultiFrameMessageType type = CanID.GetMultiFrameMessageType(canId);
+                        byte sequenceNumber = CanID.GetSequenceNumber(canId);
+                        byte messageNumber = CanID.GetMessageNumber(canId);
+                        byte source = CanID.GetSource(canId);
+                        ReceiveBuffer buffer = _buffersBySender.GetOrAdd(source, _ => new ReceiveBuffer());
+                        if (_reportParser.TryParse(sequenceNumber, messageNumber, type, buffer, data, out ulong? eui, out CborReader? reader))
+                        {
+                            NotifyReport(eui, reader);
+                        }
+                        break;
                 }
-            }
-            catch (SocketCanException scex)
-            {
-                exceptions.Add(scex);
-                if (exceptions.Count > ExceptionThreshold)
-                {
-                    throw new AggregateException($"Multiple errors occurred while reading from CAN interface {_canInterface.Interface.Name}.");
-                }
-                Thread.Sleep(ExceptionBackoffInterval);
             }
         }
+        catch (SocketCanException scex)
+        {
+            exceptions.Add(scex);
+            if (exceptions.Count > ExceptionThreshold)
+            {
+                throw new AggregateException($"Multiple errors occurred while reading from CAN interface {_canInterface.Interface.Name}.", exceptions);
+            }
+            Thread.Sleep(ExceptionBackoffInterval);
+        }
+        return ValueTask.CompletedTask;
     }
 
-    private void NotifyReport(ReadOnlyMemory<byte> body)
+    private void NotifyControl(uint canId, ReadOnlyMemory<byte> body)
     {
-        CborReader reader = new CborReader(body, CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
-        reader.ReadUInt32();
-        _callback?.Invoke(body.Slice(body.Length - reader.BytesRemaining));
-    }
-
-    private void NotifyItem(uint canId, ReadOnlyMemory<byte> body)
-    {
+        // assemble the received item into a multi-frame report
+        // (i.e. a map with 1 element)
         byte[] buffer = new byte[body.Length + 4];
         buffer[0] = 0xA1; // map with 1 element
-        buffer[1] = 0x19; // ushort
-        Span<byte> span = buffer;
-        BinaryPrimitives.WriteUInt16BigEndian(span.Slice(2), CanID.GetDataID(canId));
+        ushort id = CanID.GetDataID(canId);
+        int headerLength;
+        // manual encoding of CBOR integer
+        // (don't think it's worth sparking up a CBOR writer for this)
+        if (id <= 23)
+        {
+            buffer[1] = (byte)id;
+            headerLength = 2;
+        }
+        else if (id < 256)
+        {
+            buffer[1] = 0x18;
+            buffer[2] = (byte)id;
+            headerLength = 3;
+        }
+        else
+        {
+            buffer[1] = 0x19; // ushort
+            Span<byte> span = buffer;
+            BinaryPrimitives.WriteUInt16BigEndian(span.Slice(2), id);
+            headerLength = 4;
+        }
         ReadOnlyMemory<byte> source = body;
         Memory<byte> memory = buffer;
-        source.CopyTo(memory.Slice(4));
-        _callback?.Invoke(buffer);
+        source.CopyTo(memory.Slice(headerLength));
+        NotifyReport(null, new CborReader(memory));
     }
 
-    private class ReceiveBuffer
+    private class CanReportParser : ReportParser<MultiFrameMessageType>
     {
-        public byte[] Buffer = new byte[32768];
-        public int Position;
-        public byte Sequence;
-        public byte MessageNumber;
-        public bool Started;
-
-        public void Reset()
+        protected override bool IsFirst(MultiFrameMessageType type)
         {
-            Position = 0;
-            Sequence = 0;
-            Started = false;
+            return type == MultiFrameMessageType.First || type == MultiFrameMessageType.Last;
+        }
+
+        protected override bool IsLast(MultiFrameMessageType type)
+        {
+            return type == MultiFrameMessageType.First || type == MultiFrameMessageType.Last;
         }
     }
 }

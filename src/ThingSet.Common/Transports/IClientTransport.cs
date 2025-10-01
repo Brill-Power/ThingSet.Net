@@ -4,12 +4,13 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 using System;
+using System.Formats.Cbor;
 using System.Threading.Tasks;
 
 namespace ThingSet.Common.Transports;
 
 /// <summary>
-/// Tentative interface for the transport layer of a ThingSet client.
+/// Interface for the transport layer of a ThingSet client.
 /// </summary>
 public interface IClientTransport : ITransport
 {
@@ -20,7 +21,7 @@ public interface IClientTransport : ITransport
     /// </summary>
     /// <param name="callback">A callback that is invoked when a
     /// report is received.</param>
-    ValueTask SubscribeAsync(Action<ReadOnlyMemory<byte>> callback);
+    ValueTask SubscribeAsync(Action<ulong?, CborReader> callback);
 
     /// <summary>
     /// Write data from a buffer to the transport.

@@ -3,14 +3,10 @@
  *
  * SPDX-License-Identifier: Apache-2.0
  */
-using System;
-using System.Collections.Concurrent;
 using System.Formats.Cbor;
 using System.Net;
 using System.Net.Sockets;
-using System.Threading;
 using System.Threading.Tasks;
-using ThingSet.Common.Protocols.Binary;
 using static ThingSet.Common.Transports.Ip.Protocol;
 
 namespace ThingSet.Common.Transports.Ip;
@@ -18,7 +14,7 @@ namespace ThingSet.Common.Transports.Ip;
 /// <summary>
 /// ThingSet client transport for IP (TCP/UDP).
 /// </summary>
-public class IpClientTransport : IClientTransport
+public class IpClientTransport : ClientTransportBase<IPEndPoint>, IClientTransport
 {
     private readonly string _hostname;
     private readonly int _port;
@@ -26,11 +22,7 @@ public class IpClientTransport : IClientTransport
     private readonly TcpClient _tcpClient;
     private readonly UdpClient _udpClient;
 
-    private readonly ConcurrentDictionary<IPEndPoint, ReceiveBuffer> _buffersBySender = new ConcurrentDictionary<IPEndPoint, ReceiveBuffer>();
-    private readonly Thread _subscriptionThread;
-    private bool _runSubscriptionThread = true;
-
-    private Action<ReadOnlyMemory<byte>>? _callback;
+    private readonly UdpReportParser _reportParser = new UdpReportParser();
 
     public IpClientTransport(string hostname) : this(hostname, Protocol.RequestResponsePort)
     {
@@ -42,124 +34,70 @@ public class IpClientTransport : IClientTransport
         _port = port;
         _tcpClient = new TcpClient();
         _udpClient = new UdpClient();
-
-        _subscriptionThread = new Thread(RunSubscriptionThread)
-        {
-            IsBackground = true,
-            Name = $"Subscription {hostname:x}",
-        };
     }
 
-    public async ValueTask ConnectAsync()
+    protected override string Address => _hostname;
+
+    public async override ValueTask ConnectAsync()
     {
         await _tcpClient.ConnectAsync(_hostname, _port);
     }
 
-    public void Dispose()
-    {
-        _runSubscriptionThread = false;
-        if (_subscriptionThread.IsAlive)
-        {
-            _subscriptionThread.Join(1000);
-        }
-        _tcpClient.Dispose();
-        _udpClient.Dispose();
-    }
-
-    public int Read(byte[] buffer)
+    public override int Read(byte[] buffer)
     {
         return _tcpClient.GetStream().Read(buffer, 0, buffer.Length);
     }
 
-    public ValueTask SubscribeAsync(Action<ReadOnlyMemory<byte>> callback)
+    protected override ValueTask SubscribeAsync()
     {
-        _callback = callback;
         _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
         _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, Protocol.PublishSubscribePort));
-        _subscriptionThread.Start();
         return ValueTask.CompletedTask;
     }
 
-    public bool Write(byte[] buffer, int length)
+    public override bool Write(byte[] buffer, int length)
     {
         _tcpClient.GetStream().Write(buffer, 0, length);
         return true;
     }
 
-    private async void RunSubscriptionThread()
+    protected override void Dispose(bool disposing)
     {
-        while (_runSubscriptionThread)
-        {
-            try
-            {
-                UdpReceiveResult result = await _udpClient.ReceiveAsync();
-                MessageType messageType = (MessageType)(result.Buffer[0] & 0xF0);
-                byte sequenceNumber = (byte)(result.Buffer[0] & 0x0F);
-                byte messageNumber = result.Buffer[1];
-                ReceiveBuffer buffer = _buffersBySender.GetOrAdd(result.RemoteEndPoint, _ => new ReceiveBuffer());
-                if (messageType == MessageType.Single || messageType == MessageType.First)
-                {
-                    buffer.Started = true;
-                    buffer.MessageNumber = messageNumber;
-                }
-                else if (buffer.MessageNumber != messageNumber)
-                {
-                    buffer.Reset();
-                    continue;
-                }
-                else if (!buffer.Started)
-                {
-                    buffer.Reset();
-                    continue;
-                }
+        _tcpClient.Dispose();
+        _udpClient.Dispose();
+    }
 
-                if (sequenceNumber == (buffer.Sequence++ & 0xF))
-                {
-                    buffer.Append(result.Buffer);
-                }
-                if ((messageType == MessageType.Last || messageType == MessageType.Single) &&
-                    buffer.Buffer[0] == (byte)ThingSetRequest.Report)
-                {
-                    ReadOnlyMemory<byte> memory = buffer.Buffer;
-                    var len = memory.Length;
-                    NotifyReport(memory.Slice(1, buffer.Position - 1));
-                    buffer.Reset();
-                }
-            }
-            catch (SocketException)
+    protected async override ValueTask HandleIncomingPublicationsAsync()
+    {
+        try
+        {
+            UdpReceiveResult result = await _udpClient.ReceiveAsync();
+            MessageType messageType = (MessageType)(result.Buffer[0] & 0xF0);
+            byte sequenceNumber = (byte)(result.Buffer[0] & 0x0F);
+            byte messageNumber = result.Buffer[1];
+            ReceiveBuffer buffer = _buffersBySender.GetOrAdd(result.RemoteEndPoint, _ => new ReceiveBuffer());
+            if (_reportParser.TryParse(sequenceNumber, messageNumber, messageType, buffer, result.Buffer, out ulong? eui, out CborReader? reader))
             {
+                NotifyReport(eui, reader);
             }
+        }
+        catch (SocketException)
+        {
         }
     }
 
-    private void NotifyReport(ReadOnlyMemory<byte> body)
+    private class UdpReportParser : ReportParser<MessageType>
     {
-        CborReader reader = new CborReader(body, CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
-        reader.ReadUInt32();
-        _callback?.Invoke(body.Slice(body.Length - reader.BytesRemaining));
-    }
+        protected override int Offset => 2;
 
-    private class ReceiveBuffer
-    {
-        public byte[] Buffer = new byte[32768];
-        public int Position;
-        public byte Sequence;
-        public byte MessageNumber;
-        public bool Started;
-
-        public void Reset()
+        protected override bool IsFirst(MessageType type)
         {
-            Position = 0;
-            Sequence = 0;
-            Started = false;
+            return type == MessageType.Single || type == MessageType.First;
         }
 
-        public void Append(byte[] buffer)
+        protected override bool IsLast(MessageType type)
         {
-            ReadOnlySpan<byte> source = buffer;
-            Span<byte> destination = Buffer;
-            source.Slice(2).CopyTo(destination.Slice(Position));
-            Position += buffer.Length - 2;
+            return type == MessageType.Single || type == MessageType.Last;
         }
     }
 }

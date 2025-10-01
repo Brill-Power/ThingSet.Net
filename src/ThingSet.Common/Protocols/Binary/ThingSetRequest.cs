@@ -15,5 +15,6 @@ public enum ThingSetRequest : byte
     Update  = 0x07,
     Forward = 0x1C,
     Desire  = 0x1D,
-    Report  = 0x1F,
+    ReportEnhanced = 0x1E,
+    Report = 0x1F,
 }

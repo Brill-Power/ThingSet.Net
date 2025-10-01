@@ -9,12 +9,14 @@ using System.Threading.Tasks;
 
 namespace ThingSet.Common.Transports;
 
+/// <summary>
+/// Interface for transports for ThingSet servers.
+/// </summary>
 public interface IServerTransport : ITransport
 {
     ValueTask ListenAsync(Func<object, Memory<byte>, Memory<byte>> callback);
 
     event EventHandler<ErrorEventArgs>? Error;
 
-    void PublishControl(ushort id, byte[] buffer);
     void PublishReport(byte[] buffer);
 }
