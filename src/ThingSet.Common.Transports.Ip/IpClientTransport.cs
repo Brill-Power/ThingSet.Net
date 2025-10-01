@@ -68,10 +68,6 @@ public class IpClientTransport : IClientTransport
 
     public int Read(byte[] buffer)
     {
-        if (!_tcpClient.Connected)
-        {
-            _tcpClient.Connect(_hostname, _port);
-        }
         return _tcpClient.GetStream().Read(buffer, 0, buffer.Length);
     }
 

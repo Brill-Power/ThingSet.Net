@@ -7,7 +7,7 @@ namespace ThingSet.Common.Nodes;
 
 public class ThingSetFunctionParameter : ThingSetNode
 {
-    public ThingSetFunctionParameter(ushort id, string name, ThingSetType type) : base(id, name)
+    public ThingSetFunctionParameter(ushort id, string name, ushort parentId, ThingSetType type) : base(id, name, parentId)
     {
         Type = type;
     }

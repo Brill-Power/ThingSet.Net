@@ -10,6 +10,7 @@ using System.Formats.Cbor;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
 using System.Threading.Tasks;
 using ThingSet.Common.Nodes;
 using ThingSet.Common.Protocols;
@@ -21,6 +22,10 @@ namespace ThingSet.Server;
 public class ThingSetServer : IDisposable
 {
     private readonly IServerTransport _transport;
+
+    private  const ushort MetadataNameId = 0x1a;
+    private const ushort MetadataTypeId = 0x1b;
+    private const ushort MetadataAccessId = 0x1c;
 
     public ThingSetServer(IServerTransport transport)
     {
@@ -41,7 +46,8 @@ public class ThingSetServer : IDisposable
         int length;
         if (span[0] > 0x20)
         {
-            throw new NotSupportedException("Text mode is not currently supported.");
+            // don't support text mode at the moment
+            return Encoding.UTF8.GetBytes($":{(byte)ThingSetStatus.NotImplemented:X2}");
         }
         else
         {
@@ -134,7 +140,7 @@ public class ThingSetServer : IDisposable
         CborReader reader = new CborReader(context.RequestBody, CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
         if (reader.PeekState() == CborReaderState.Null)
         {
-            if (context.Endpoint is ThingSetParentNode parent)
+            if (context.Endpoint is IThingSetParentNode parent)
             {
                 if (context.UseIds)
                 {
@@ -144,6 +150,34 @@ public class ThingSetServer : IDisposable
                 {
                     CborSerialiser.Write(writer, parent.Children.Select(c => c.Name).ToArray());
                 }
+                writer.Encode(responseSpan.Slice(1));
+                return writer.BytesWritten + 1;
+            }
+            else
+            {
+                responseSpan[0] = (byte)ThingSetStatus.BadRequest;
+                return 1;
+            }
+        }
+        else if (context.Endpoint == ThingSetRegistry.Metadata &&
+            reader.PeekState() == CborReaderState.StartArray)
+        {
+            if (CborDeserialiser.Read(reader) is object?[] ids)
+            {
+                List<Dictionary<ushort, object>> metadata = new List<Dictionary<ushort, object>>();
+                foreach (uint id in ids.OfType<uint>())
+                {
+                    if (ThingSetRegistry.TryGetNode((ushort)id, out ThingSetNode? node))
+                    {
+                        metadata.Add(new Dictionary<ushort, object>
+                        {
+                            { MetadataNameId, node.Name },
+                            { MetadataTypeId, node.Type.Type },
+                            { MetadataAccessId, ThingSetAccess.AnyReadWrite }, // TODO
+                        });
+                    }
+                }
+                CborSerialiser.Write(writer, metadata.ToArray());
                 writer.Encode(responseSpan.Slice(1));
                 return writer.BytesWritten + 1;
             }
@@ -166,7 +200,7 @@ public class ThingSetServer : IDisposable
         responseSpan[0] = (byte)ThingSetStatus.Content;
         CborWriter writer = new CborWriter(CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
         writer.WriteNull();
-        if (context.Endpoint is ThingSetParentNode parent)
+        if (context.Endpoint is IThingSetParentNode parent)
         {
             if (context.UseIds)
             {
@@ -267,9 +301,16 @@ internal class ThingSetBinaryRequestContext : ThingSetRequestContextBase
         {
             Endpoint = node;
         }
-        else if (!String.IsNullOrEmpty(Path))
+        else if (Path != null) // empty is valid
         {
-            //
+            if (ThingSetRegistry.TryGetNode(Path, out node, out ThingSetStatus? error))
+            {
+                Endpoint = node;
+            }
+            else
+            {
+                // how to signal error?
+            }
         }
         RequestBody = request.Slice(request.Length - _cborReader.BytesRemaining);
     }

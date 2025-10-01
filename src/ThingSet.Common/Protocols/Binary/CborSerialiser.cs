@@ -93,6 +93,9 @@ public static class CborSerialiser
             case Array a:
                 WriteArray(writer, a);
                 break;
+            case Enum e:
+                Write(writer, Convert.ChangeType(value, value.GetType().GetEnumUnderlyingType()));
+                break;
             default:
                 if (value is null)
                 {
