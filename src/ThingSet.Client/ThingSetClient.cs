@@ -210,9 +210,8 @@ public class ThingSetClient : IThingSetClient
         }
     }
 
-    private void OnReportReceived(ReadOnlyMemory<byte> buffer)
+    private void OnReportReceived(ulong? eui, CborReader reader)
     {
-        CborReader reader = new CborReader(buffer);
         try
         {
             if (CborDeserialiser.Read(reader) is Dictionary<object, object> map)

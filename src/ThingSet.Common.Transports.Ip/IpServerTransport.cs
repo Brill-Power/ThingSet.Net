@@ -17,7 +17,7 @@ namespace ThingSet.Common.Transports.Ip;
 /// <summary>
 /// ThingSet server transport for IP (TCP/UDP).
 /// </summary>
-public class IpServerTransport : IServerTransport
+public class IpServerTransport : ServerTransportBase, IServerTransport
 {
     private const int MessageSize = 512;
     private const int HeaderSize = 2;
@@ -38,8 +38,6 @@ public class IpServerTransport : IServerTransport
     {
     }
 
-    public event EventHandler<ErrorEventArgs>? Error;
-
     public IpServerTransport(IPAddress listenAddress)
     {
         _listener = new TcpListener(listenAddress, Protocol.RequestResponsePort);
@@ -54,27 +52,16 @@ public class IpServerTransport : IServerTransport
         };
     }
 
-    public void Dispose()
-    {
-        _listenerCanceller.Cancel();
-        _listener.Stop();
-        _listener.Dispose();
-        _udpClient.Dispose();
-    }
+    public override event EventHandler<ErrorEventArgs>? Error;
 
-    public ValueTask ListenAsync(Func<object, Memory<byte>, Memory<byte>> callback)
+    public override ValueTask ListenAsync(Func<object, Memory<byte>, Memory<byte>> callback)
     {
         _callback = callback;
         _listenThread.Start();
         return ValueTask.CompletedTask;
     }
 
-    public void PublishControl(ushort id, byte[] buffer)
-    {
-        throw new NotImplementedException();
-    }
-
-    public void PublishReport(byte[] buffer)
+    public override void PublishReport(byte[] buffer)
     {
         int written = 0;
         MessageType messageType;
@@ -92,7 +79,7 @@ public class IpServerTransport : IServerTransport
             frame[0] = (byte)((byte)messageType | (sequenceNumber++ & 0x0F));
             unchecked
             {
-                frame[1] = _messageNumber++;
+                frame[1] = _messageNumber;
             }
 
             Span<byte> slice = source.Slice(written, size);
@@ -100,6 +87,18 @@ public class IpServerTransport : IServerTransport
             _udpClient.Send(frame.Slice(0, HeaderSize + size), Broadcast);
             written += size;
         }
+        unchecked
+        {
+            _messageNumber++;
+        }
+    }
+
+    protected override void Dispose(bool disposing)
+    {
+        _listenerCanceller.Cancel();
+        _listener.Stop();
+        _listener.Dispose();
+        _udpClient.Dispose();
     }
 
     private async void RunListener()

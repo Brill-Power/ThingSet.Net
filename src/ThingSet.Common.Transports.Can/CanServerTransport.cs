@@ -13,10 +13,12 @@ using SocketCANSharp.Network;
 
 namespace ThingSet.Common.Transports.Can;
 
-public class CanServerTransport : CanTransportBase, IServerTransport
+public class CanServerTransport : ServerTransportBase, IServerTransport
 {
     private readonly ConcurrentDictionary<byte, IsoTpCanSocket> _peerSocketsById = new();
     private readonly ConcurrentDictionary<byte, Thread> _peerSocketThreadsById = new();
+
+    private readonly ThingSetCanInterface _canInterface;
 
     private readonly AddressClaimListener _addressClaimListener;
     private readonly RawCanSocket _publishSocket;
@@ -30,8 +32,10 @@ public class CanServerTransport : CanTransportBase, IServerTransport
 
     private Func<object, Memory<byte>, Memory<byte>>? _messageCallback;
 
-    public CanServerTransport(ThingSetCanInterface canInterface) : base(canInterface, leaveOpen: false)
+    public CanServerTransport(ThingSetCanInterface canInterface)
     {
+        _canInterface = canInterface;
+
         _publishSocket = new RawCanSocket
         {
             EnableCanFdFrames = canInterface.IsFdMode,
@@ -41,9 +45,9 @@ public class CanServerTransport : CanTransportBase, IServerTransport
         _addressClaimListener.AddressClaimed += OnAddressClaimed;
     }
 
-    public event EventHandler<ErrorEventArgs>? Error;
+    public override event EventHandler<ErrorEventArgs>? Error;
 
-    public ValueTask ListenAsync(Func<object, Memory<byte>, Memory<byte>> callback)
+    public override ValueTask ListenAsync(Func<object, Memory<byte>, Memory<byte>> callback)
     {
         _addressClaimListener.Listen();
 
@@ -73,7 +77,7 @@ public class CanServerTransport : CanTransportBase, IServerTransport
         }
     }
 
-    public void PublishReport(byte[] buffer)
+    public override void PublishReport(byte[] buffer)
     {
         int pos = 0;
         byte sequenceNumber = 0;
@@ -135,7 +139,6 @@ public class CanServerTransport : CanTransportBase, IServerTransport
 
     protected override void Dispose(bool disposing)
     {
-        base.Dispose(disposing);
         _runPeerSocketHandlers = false;
         foreach (Thread thread in _peerSocketThreadsById.Values)
         {
@@ -145,6 +148,7 @@ public class CanServerTransport : CanTransportBase, IServerTransport
         {
             socket.Dispose();
         }
+        _canInterface.Dispose();
     }
 
     private void RunPeerSocketHandler(object? state)
@@ -199,7 +203,7 @@ public class CanServerTransport : CanTransportBase, IServerTransport
 
     private IsoTpCanSocket CreateAndBindIsoTpCanSocket(byte targetId)
     {
-        IsoTpCanSocket socket = CreateIsoTpCanSocket(_canInterface.IsFdMode);
+        IsoTpCanSocket socket = IsoTpCanSocketFactory.CreateIsoTpCanSocket(_canInterface.IsFdMode);
         socket.Bind(_canInterface.Interface,
             txId: CanID.CreateCanID(MessageType.RequestResponse, MessagePriority.Channel, _canInterface.NodeAddress, targetId),
             rxId: CanID.CreateCanID(MessageType.RequestResponse, MessagePriority.Channel, targetId, _canInterface.NodeAddress));
