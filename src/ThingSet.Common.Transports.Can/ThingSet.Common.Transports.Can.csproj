@@ -9,7 +9,7 @@
     <ProjectUrl>https://github.com/Brill-Power/ThingSet.Net</ProjectUrl>
     <RepositoryUrl>https://github.com/Brill-Power/ThingSet.Net.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Description>CAN transport for .NET ThingSet client</Description>
+    <Description>CAN transport for .NET ThingSet client and server</Description>
     <PackageId>ThingSet.Common.Transports.Can</PackageId>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>
@@ -17,7 +17,7 @@
   </PropertyGroup>
 
   <ItemGroup>
-    <PackageReference Include="SocketCANSharp" Version="0.12.0" />
+    <PackageReference Include="SocketCANSharp" Version="0.13.0" />
   </ItemGroup>
 
   <ItemGroup>

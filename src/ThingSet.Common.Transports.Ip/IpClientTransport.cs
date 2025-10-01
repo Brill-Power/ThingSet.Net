@@ -11,14 +11,15 @@ using System.Net.Sockets;
 using System.Threading;
 using System.Threading.Tasks;
 using ThingSet.Common.Protocols.Binary;
+using static ThingSet.Common.Transports.Ip.Protocol;
 
 namespace ThingSet.Common.Transports.Ip;
 
+/// <summary>
+/// ThingSet client transport for IP (TCP/UDP).
+/// </summary>
 public class IpClientTransport : IClientTransport
 {
-    private const int MessageSize = 512;
-    private const int MessageTypePosition = 4;
-
     private readonly string _hostname;
     private readonly int _port;
 
@@ -30,6 +31,10 @@ public class IpClientTransport : IClientTransport
     private bool _runSubscriptionThread = true;
 
     private Action<ReadOnlyMemory<byte>>? _callback;
+
+    public IpClientTransport(string hostname) : this(hostname, Protocol.RequestResponsePort)
+    {
+    }
 
     public IpClientTransport(string hostname, int port)
     {
@@ -70,7 +75,7 @@ public class IpClientTransport : IClientTransport
     {
         _callback = callback;
         _udpClient.Client.SetSocketOption(SocketOptionLevel.Socket, SocketOptionName.ReuseAddress, true);
-        _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, 9002));
+        _udpClient.Client.Bind(new IPEndPoint(IPAddress.Any, Protocol.PublishSubscribePort));
         _subscriptionThread.Start();
         return ValueTask.CompletedTask;
     }
@@ -156,13 +161,5 @@ public class IpClientTransport : IClientTransport
             source.Slice(2).CopyTo(destination.Slice(Position));
             Position += buffer.Length - 2;
         }
-    }
-
-    private enum MessageType
-    {
-        First = 0x0 << MessageTypePosition,
-        Consecutive = 0x1 << MessageTypePosition,
-        Last = 0x2 << MessageTypePosition,
-        Single = 0x3 << MessageTypePosition,
     }
 }

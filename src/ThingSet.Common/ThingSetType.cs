@@ -4,8 +4,10 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 using System;
+using System.Collections.Generic;
+using System.Linq;
 
-namespace ThingSet.Common.Protocols;
+namespace ThingSet.Common;
 
 /// <summary>
 /// Represents the type of an item in ThingSet.
@@ -22,6 +24,7 @@ public struct ThingSetType : IEquatable<ThingSetType>
     public static readonly ThingSetType UInt64 = "u64";
     public static readonly ThingSetType Int64 = "i64";
     public static readonly ThingSetType Float = "f32";
+    public static readonly ThingSetType Double = "f64";
     public static readonly ThingSetType Decimal = "decimal";
     public static readonly ThingSetType String = "string";
     public static readonly ThingSetType Buffer = "buffer";
@@ -58,6 +61,78 @@ public struct ThingSetType : IEquatable<ThingSetType>
     /// If this value represents an array type, gets the type of the elements in the array.
     /// </summary>
     public ThingSetType? ElementType => IsArray ? Type.Substring(0, Type.Length - 2) : (ThingSetType?)null;
+
+    public static ThingSetType GetType(Type parameterType)
+    {
+        parameterType = Nullable.GetUnderlyingType(parameterType) ?? parameterType;
+
+        switch (System.Type.GetTypeCode(parameterType))
+        {
+            case TypeCode.Boolean:
+                return Boolean;
+            case TypeCode.Byte:
+                return UInt8;
+            case TypeCode.SByte:
+                return Int8;
+            case TypeCode.UInt16:
+                return UInt16;
+            case TypeCode.Int16:
+                return Int16;
+            case TypeCode.UInt32:
+                return UInt32;
+            case TypeCode.Int32:
+                return Int32;
+            case TypeCode.UInt64:
+                return UInt64;
+            case TypeCode.Int64:
+                return Int64;
+            case TypeCode.Single:
+                return Float;
+            case TypeCode.Double:
+                return Double;
+            case TypeCode.Decimal:
+                return Decimal;
+            case TypeCode.String:
+                return String;
+            default:
+                if (parameterType == typeof(void))
+                {
+                    return new ThingSetType(System.String.Empty);
+                }
+                if (parameterType.IsArray)
+                {
+                    return $"{GetType(parameterType.GetElementType()!)}";
+                }
+                if (parameterType.IsEnum)
+                {
+                    return GetType(parameterType.GetEnumUnderlyingType());
+                }
+                if (typeof(Delegate).IsAssignableFrom(parameterType))
+                {
+                    if (parameterType.IsGenericType)
+                    {
+                        Type[] types = parameterType.GetGenericArguments();
+                        Type delegateType = parameterType.GetGenericTypeDefinition();
+                        IEnumerable<Type> args = types;
+                        Type returnType;
+                        if (delegateType.Name.StartsWith("Func"))
+                        {
+                            // last arg is return type
+                            args = types.SkipLast(1);
+                            returnType = types[types.Length - 1];
+                        }
+                        else
+                        {
+                            // returns void
+                            returnType = typeof(void);
+                        }
+                        return $"({System.String.Join(",", args.Select(a => GetType(a)))})->({GetType(returnType)})";
+                    }
+                    return "()->()"; // don't think we can reflectively get the type
+                }
+                return "unknown";
+        }
+    }
 
     public bool Equals(ThingSetType other) => Type == other.Type;
 

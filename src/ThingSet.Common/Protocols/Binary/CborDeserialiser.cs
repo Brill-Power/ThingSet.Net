@@ -21,7 +21,7 @@ public static class CborDeserialiser
             case CborReaderState.UnsignedInteger:
                 return ReadInteger(reader, state);
             case CborReaderState.HalfPrecisionFloat:
-                return reader.ReadHalf();
+                return (float)reader.ReadHalf();
             case CborReaderState.SinglePrecisionFloat:
                 return reader.ReadSingle();
             case CborReaderState.DoublePrecisionFloat:

@@ -13,7 +13,7 @@
     <ProjectUrl>https://github.com/Brill-Power/ThingSet.Net</ProjectUrl>
     <RepositoryUrl>https://github.com/Brill-Power/ThingSet.Net.git</RepositoryUrl>
     <RepositoryType>git</RepositoryType>
-    <Description>IP transport for .NET ThingSet client</Description>
+    <Description>IP transport for .NET ThingSet client and server</Description>
     <PackageId>ThingSet.Common.Transports.Ip</PackageId>
     <PackageLicenseExpression>Apache-2.0</PackageLicenseExpression>
     <PackageReadmeFile>README.md</PackageReadmeFile>

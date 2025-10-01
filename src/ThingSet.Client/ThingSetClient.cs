@@ -191,11 +191,11 @@ public class ThingSetClient : IThingSetClient
             {
                 throw new IOException("Could not connect to ThingSet endpoint.");
             }
-            _transport.Read(buffer);
+            int read = _transport.Read(buffer);
             ThingSetResponse response = (ThingSetStatus)buffer[0];
             if (response.Success)
             {
-                CborReader reader = new CborReader(buffer.AsMemory().Slice(1), CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
+                CborReader reader = new CborReader(buffer.AsMemory().Slice(1, read - 1), CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
                 reader.ReadNull();
                 return CborDeserialiser.Read(reader);
             }
