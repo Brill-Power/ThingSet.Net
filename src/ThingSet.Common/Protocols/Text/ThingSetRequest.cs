@@ -5,7 +5,7 @@
  */
 namespace ThingSet.Common.Protocols.Text;
 
-public enum ThingSetTextRequestType : byte
+public enum ThingSetRequest : byte
 {
     GetFetch = (byte)'?', /**< Function code for GET and FETCH requests in text mode. */
     Exec     = (byte)'!', /**< Function code for EXEC request in text mode. */

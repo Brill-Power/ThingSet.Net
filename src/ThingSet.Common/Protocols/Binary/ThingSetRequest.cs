@@ -5,7 +5,7 @@
  */
 namespace ThingSet.Common.Protocols.Binary;
 
-public enum ThingSetBinaryRequestType : byte
+public enum ThingSetRequest : byte
 {
     Get     = 0x01,
     Exec    = 0x02,

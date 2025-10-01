@@ -85,17 +85,17 @@ public class ThingSetClient : IThingSetClient
 
     public object? Get(uint id)
     {
-        return DoRequest(ThingSetBinaryRequestType.Get, cw => cw.WriteUInt32(id));
+        return DoRequest(ThingSetRequest.Get, cw => cw.WriteUInt32(id));
     }
 
     public object? Get(string path)
     {
-        return DoRequest(ThingSetBinaryRequestType.Get, cw => cw.WriteTextString(path));
+        return DoRequest(ThingSetRequest.Get, cw => cw.WriteTextString(path));
     }
 
     public object? Fetch(uint id, object arg)
     {
-        return DoRequest(ThingSetBinaryRequestType.Fetch, cw =>
+        return DoRequest(ThingSetRequest.Fetch, cw =>
         {
             cw.WriteUInt32(id);
             CborSerialiser.Write(cw, arg);
@@ -104,7 +104,7 @@ public class ThingSetClient : IThingSetClient
 
     public object? Fetch(uint id, params object[] args)
     {
-        return DoRequest(ThingSetBinaryRequestType.Fetch, cw =>
+        return DoRequest(ThingSetRequest.Fetch, cw =>
         {
             cw.WriteUInt32(id);
             if (args.Length == 0)
@@ -120,7 +120,7 @@ public class ThingSetClient : IThingSetClient
 
     public object? Fetch(string path)
     {
-        return DoRequest(ThingSetBinaryRequestType.Fetch, cw =>
+        return DoRequest(ThingSetRequest.Fetch, cw =>
         {
             cw.WriteTextString(path);
             cw.WriteNull();
@@ -129,7 +129,7 @@ public class ThingSetClient : IThingSetClient
 
     public object? Update(string fullyQualifiedName, object value)
     {
-        return DoRequest(ThingSetBinaryRequestType.Update, cw =>
+        return DoRequest(ThingSetRequest.Update, cw =>
         {
             int index = fullyQualifiedName.LastIndexOf('/');
             string pathToParent = index > 0 ? fullyQualifiedName.Substring(0, index) : String.Empty;
@@ -145,7 +145,7 @@ public class ThingSetClient : IThingSetClient
 
     public object? Exec(uint id, params object[] args)
     {
-        return DoRequest(ThingSetBinaryRequestType.Exec, cw =>
+        return DoRequest(ThingSetRequest.Exec, cw =>
         {
             cw.WriteUInt32(id);
             CborSerialiser.Write(cw, args);
@@ -154,14 +154,14 @@ public class ThingSetClient : IThingSetClient
 
     public object? Exec(string path, params object[] args)
     {
-        return DoRequest(ThingSetBinaryRequestType.Exec, cw =>
+        return DoRequest(ThingSetRequest.Exec, cw =>
         {
             cw.WriteTextString(path);
             CborSerialiser.Write(cw, args);
         });
     }
 
-    private object? DoRequest(ThingSetBinaryRequestType action, Action<CborWriter> write)
+    private object? DoRequest(ThingSetRequest action, Action<CborWriter> write)
     {
         byte[] buffer = new byte[4095];
         Span<byte> span = buffer;
@@ -169,7 +169,7 @@ public class ThingSetClient : IThingSetClient
         if (TargetNodeID.HasValue)
         {
             // prefix the request with node to forward to
-            span[0] = (byte)ThingSetBinaryRequestType.Forward;
+            span[0] = (byte)ThingSetRequest.Forward;
             CborWriter w = new CborWriter(CborConformanceMode.Lax);
             w.WriteTextString($"{TargetNodeID.Value:x}");
             w.Encode(span.Slice(1));

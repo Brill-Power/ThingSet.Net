@@ -328,12 +328,12 @@ internal abstract class ThingSetRequestContextBase
 
 internal class ThingSetBinaryRequestContext : ThingSetRequestContextBase
 {
-    private readonly ThingSetBinaryRequestType _requestType;
+    private readonly ThingSetRequest _requestType;
     private readonly CborReader _cborReader;
 
     internal ThingSetBinaryRequestContext(Memory<byte> request) : base(request)
     {
-        _requestType = (ThingSetBinaryRequestType)request.Span[0];
+        _requestType = (ThingSetRequest)request.Span[0];
         _cborReader = new CborReader(request.Slice(1), CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
 
         CborReaderState state = _cborReader.PeekState();
@@ -370,8 +370,8 @@ internal class ThingSetBinaryRequestContext : ThingSetRequestContextBase
         RequestBody = request.Slice(request.Length - _cborReader.BytesRemaining);
     }
 
-    public override bool IsGet => _requestType == ThingSetBinaryRequestType.Get;
-    public override bool IsFetch => _requestType == ThingSetBinaryRequestType.Fetch;
-    public override bool IsUpdate => _requestType == ThingSetBinaryRequestType.Update;
-    public override bool IsExec => _requestType == ThingSetBinaryRequestType.Exec;
+    public override bool IsGet => _requestType == ThingSetRequest.Get;
+    public override bool IsFetch => _requestType == ThingSetRequest.Fetch;
+    public override bool IsUpdate => _requestType == ThingSetRequest.Update;
+    public override bool IsExec => _requestType == ThingSetRequest.Exec;
 }

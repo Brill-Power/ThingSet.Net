@@ -118,7 +118,7 @@ public class IpClientTransport : IClientTransport
                     buffer.Append(result.Buffer);
                 }
                 if ((messageType == MessageType.Last || messageType == MessageType.Single) &&
-                    buffer.Buffer[0] == (byte)ThingSetBinaryRequestType.Report)
+                    buffer.Buffer[0] == (byte)ThingSetRequest.Report)
                 {
                     ReadOnlyMemory<byte> memory = buffer.Buffer;
                     var len = memory.Length;
