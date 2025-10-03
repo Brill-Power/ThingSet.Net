@@ -144,7 +144,7 @@ public class CanClientTransport : ClientTransportBase<byte>, IClientTransport
                 switch (CanID.GetType(canId))
                 {
                     case MessageType.SingleFrameReport:
-                        NotifyItem(canId, data);
+                        NotifyControl(canId, data);
                         break;
                     case MessageType.MultiFrameReport:
                         MultiFrameMessageType type = CanID.GetMultiFrameMessageType(canId);
@@ -172,12 +172,16 @@ public class CanClientTransport : ClientTransportBase<byte>, IClientTransport
         return ValueTask.CompletedTask;
     }
 
-    private void NotifyItem(uint canId, ReadOnlyMemory<byte> body)
+    private void NotifyControl(uint canId, ReadOnlyMemory<byte> body)
     {
+        // assemble the received item into a multi-frame report
+        // (i.e. a map with 1 element)
         byte[] buffer = new byte[body.Length + 4];
         buffer[0] = 0xA1; // map with 1 element
         ushort id = CanID.GetDataID(canId);
         int headerLength;
+        // manual encoding of CBOR integer
+        // (don't think it's worth sparking up a CBOR writer for this)
         if (id <= 23)
         {
             buffer[1] = (byte)id;
