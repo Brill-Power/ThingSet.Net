@@ -9,6 +9,7 @@ using System.Formats.Cbor;
 using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using ThingSet.Client.Schema;
 using ThingSet.Common.Protocols;
 using ThingSet.Common.Protocols.Binary;
@@ -23,6 +24,8 @@ public class ThingSetClient : IThingSetClient
 {
     private static readonly TimeSpan LockTimeout = TimeSpan.FromSeconds(5);
 
+    private readonly ILogger? _logger;
+
     private readonly IClientTransport _transport;
 
     private readonly IThingSetSchemaProvider _schemaProvider;
@@ -32,20 +35,22 @@ public class ThingSetClient : IThingSetClient
 
     private Action<uint, string?, object?>? _callback;
 
-    public ThingSetClient(IClientTransport transport) : this(transport, new DefaultThingSetSchemaProvider())
+    public ThingSetClient(IClientTransport transport, ILogger? logger = null) : this(transport, new DefaultThingSetSchemaProvider(), logger)
     {
     }
 
-    public ThingSetClient(IClientTransport transport, ulong? targetNodeId) : this(transport, new DefaultThingSetSchemaProvider(), targetNodeId)
+    public ThingSetClient(IClientTransport transport, ulong? targetNodeId, ILogger? logger = null) : this(transport, new DefaultThingSetSchemaProvider(), targetNodeId, logger)
     {
     }
 
-    public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider) : this(transport, schemaProvider, null)
+    public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider, ILogger? logger = null) : this(transport, schemaProvider, null, logger)
     {
     }
 
-    public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider, ulong? targetNodeId)
+    public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider, ulong? targetNodeId, ILogger? logger = null)
     {
+        _logger = logger;
+
         _transport = transport;
         _schemaProvider = schemaProvider;
         TargetNodeID = targetNodeId;
@@ -181,6 +186,14 @@ public class ThingSetClient : IThingSetClient
         write(writer);
         writer.Encode(span.Slice(1));
         length += 1 + writer.BytesWritten;
+        if (TargetNodeID.HasValue)
+        {
+            _logger?.LogDebug($"Forwarding {action} request of length {length} to {TargetNodeID.Value:x} via {_transport.PeerAddress}");
+        }
+        else
+        {
+            _logger?.LogDebug($"Sending {action} request of length {length} to {_transport.PeerAddress}");
+        }
         if (!Monitor.TryEnter(_lock, LockTimeout))
         {
             throw new TimeoutException("Timed out trying to send request.");
@@ -193,6 +206,7 @@ public class ThingSetClient : IThingSetClient
             }
             int read = _transport.Read(buffer);
             ThingSetResponse response = (ThingSetStatus)buffer[0];
+            _logger?.LogDebug($"Received response of length {read} from {_transport.PeerAddress} with result {response}");
             if (response.Success)
             {
                 CborReader reader = new CborReader(buffer.AsMemory().Slice(1, read - 1), CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
@@ -244,6 +258,7 @@ public class ThingSetClient : IThingSetClient
         if (_schema.IsEmpty)
         {
             _schema = _schemaProvider.GetSchema(this);
+            _logger?.LogDebug($"Retrieved {(_schema.IsEmpty ? "empty " : String.Empty)}schema from {_transport.PeerAddress}");
         }
     }
 }

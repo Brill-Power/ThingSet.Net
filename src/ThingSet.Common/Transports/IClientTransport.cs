@@ -14,6 +14,12 @@ namespace ThingSet.Common.Transports;
 /// </summary>
 public interface IClientTransport : ITransport
 {
+    /// <summary>
+    /// String representation of a network identifier for the peer device
+    /// to which this client is connected.
+    /// </summary>
+    string PeerAddress { get; }
+
     ValueTask ConnectAsync();
     /// <summary>
     /// Subscribes for asynchronous reports delivered via this

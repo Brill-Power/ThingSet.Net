@@ -9,6 +9,7 @@ using System.Collections.Generic;
 using System.Formats.Cbor;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using SocketCANSharp;
 using SocketCANSharp.Network;
 
@@ -36,14 +37,16 @@ public class CanClientTransport : ClientTransportBase<byte>, IClientTransport
     private readonly byte _destinationBridge;
     private readonly byte _destinationNodeAddress;
 
-    private readonly CanReportParser _reportParser = new CanReportParser();
+    private readonly CanReportParser _reportParser;
 
-    public CanClientTransport(ThingSetCanInterface canInterface, byte destinationNodeAddress, bool leaveOpen) : this(canInterface, CanID.LocalBridge, destinationNodeAddress, leaveOpen)
+    public CanClientTransport(ThingSetCanInterface canInterface, byte destinationNodeAddress, bool leaveOpen, ILogger? logger = null) : this(canInterface, CanID.LocalBridge, destinationNodeAddress, leaveOpen, logger)
     {
     }
 
-    public CanClientTransport(ThingSetCanInterface canInterface, byte destinationBridge, byte destinationNodeAddress, bool leaveOpen)
+    public CanClientTransport(ThingSetCanInterface canInterface, byte destinationBridge, byte destinationNodeAddress, bool leaveOpen, ILogger? logger = null) : base(logger: logger)
     {
+        _reportParser = new CanReportParser(logger);
+
         _canInterface = canInterface;
         _disposeInterface = !leaveOpen;
 
@@ -65,7 +68,7 @@ public class CanClientTransport : ClientTransportBase<byte>, IClientTransport
         _canFrameReader = canInterface.IsFdMode ? ReadCanFdFrame : ReadCanFrame;
     }
 
-    protected override string Address => $"{_destinationNodeAddress:x}";
+    public override string PeerAddress => $"{_destinationNodeAddress:x}";
 
     public override ValueTask ConnectAsync()
     {
@@ -151,7 +154,7 @@ public class CanClientTransport : ClientTransportBase<byte>, IClientTransport
                         byte sequenceNumber = CanID.GetSequenceNumber(canId);
                         byte messageNumber = CanID.GetMessageNumber(canId);
                         byte source = CanID.GetSource(canId);
-                        ReceiveBuffer buffer = _buffersBySender.GetOrAdd(source, _ => new ReceiveBuffer());
+                        ReceiveBuffer buffer = GetOrCreateBuffer(source);
                         if (_reportParser.TryParse(sequenceNumber, messageNumber, type, buffer, data, out ulong? eui, out CborReader? reader))
                         {
                             NotifyReport(eui, reader);
@@ -208,6 +211,10 @@ public class CanClientTransport : ClientTransportBase<byte>, IClientTransport
 
     private class CanReportParser : ReportParser<MultiFrameMessageType>
     {
+        public CanReportParser(ILogger? logger) : base(logger)
+        {
+        }
+
         protected override bool IsFirst(MultiFrameMessageType type)
         {
             return type == MultiFrameMessageType.First || type == MultiFrameMessageType.Last;

@@ -9,6 +9,7 @@ using System.Diagnostics.CodeAnalysis;
 using System.Formats.Cbor;
 using System.Threading;
 using System.Threading.Tasks;
+using Microsoft.Extensions.Logging;
 using ThingSet.Common.Protocols.Binary;
 
 namespace ThingSet.Common.Transports;
@@ -22,24 +23,31 @@ public abstract class ClientTransportBase<TEndpoint> : IClientTransport
 {
     protected readonly ConcurrentDictionary<TEndpoint, ReceiveBuffer> _buffersBySender = new ConcurrentDictionary<TEndpoint, ReceiveBuffer>();
 
+    private readonly ILogger? _logger;
+    private readonly int _bufferSize;
+
     private Action<ulong?, CborReader>? _callback;
 
     private readonly Thread _subscriptionThread;
     private bool _runSubscriptionThread = true;
 
-    protected ClientTransportBase()
+    protected ClientTransportBase(int bufferSize = 16384, ILogger? logger = null)
     {
+        _logger = logger;
+        _bufferSize = bufferSize;
+
         _subscriptionThread = new Thread(RunSubscriptionThread)
         {
             IsBackground = true,
-            Name = $"Subscription {Address}",
+            Name = $"Subscription {PeerAddress}",
         };
     }
 
     /// <summary>
-    /// String representation of a network identifier.
+    /// String representation of a network identifier for the peer device
+    /// to which this client is connected.
     /// </summary>
-    protected abstract string Address { get; }
+    public abstract string PeerAddress { get; }
 
     /// <summary>
     /// Connects this transport.
@@ -90,6 +98,12 @@ public abstract class ClientTransportBase<TEndpoint> : IClientTransport
 
     protected abstract ValueTask HandleIncomingPublicationsAsync();
 
+    protected ReceiveBuffer GetOrCreateBuffer(TEndpoint endpoint)
+    {
+        byte[] buffer = new byte[_bufferSize];
+        return _buffersBySender.GetOrAdd(endpoint, _ => new ReceiveBuffer(buffer));
+    }
+
     protected void NotifyReport(ulong? eui, CborReader reader)
     {
         reader.ReadUInt32(); // subset ID
@@ -104,6 +118,13 @@ public abstract class ClientTransportBase<TEndpoint> : IClientTransport
     protected abstract class ReportParser<TMessageType>
         where TMessageType : Enum
     {
+        private readonly ILogger? _logger;
+
+        protected ReportParser(ILogger? logger)
+        {
+            _logger = logger;
+        }
+
         /// <returns>True if a complete message has been assembled.</returns>
         public bool TryParse(byte sequenceNumber, byte messageNumber, TMessageType messageType,
             ReceiveBuffer buffer, byte[] data, [MaybeNullWhen(true)] out ulong? eui,
@@ -116,14 +137,17 @@ public abstract class ClientTransportBase<TEndpoint> : IClientTransport
             {
                 buffer.Started = true;
                 buffer.MessageNumber = messageNumber;
+                _logger?.LogDebug($"Message {messageNumber} started");
             }
             else if (buffer.MessageNumber != messageNumber)
             {
+                _logger?.LogDebug($"Message {messageNumber} mismatch; expected {buffer.MessageNumber}");
                 buffer.Reset();
                 return false;
             }
             else if (!buffer.Started)
             {
+                _logger?.LogDebug($"Message unexpected");
                 buffer.Reset();
                 return false;
             }
@@ -135,6 +159,7 @@ public abstract class ClientTransportBase<TEndpoint> : IClientTransport
             }
             if (IsLast(messageType))
             {
+                _logger?.LogDebug($"Dispatching message {messageNumber} of length {buffer.Position}");
                 ReadOnlyMemory<byte> memory = buffer.Buffer;
                 reader = new CborReader(memory.Slice(1), CborConformanceMode.Lax, allowMultipleRootLevelValues: true);
                 if (buffer.Buffer[0] == (byte)ThingSetRequest.ReportEnhanced)
@@ -156,7 +181,12 @@ public abstract class ClientTransportBase<TEndpoint> : IClientTransport
 
     protected class ReceiveBuffer
     {
-        public byte[] Buffer = new byte[32768];
+        public ReceiveBuffer(byte[] buffer)
+        {
+            Buffer = buffer;
+        }
+
+        public byte[] Buffer;
         public int Position;
         public byte Sequence;
         public byte MessageNumber;
