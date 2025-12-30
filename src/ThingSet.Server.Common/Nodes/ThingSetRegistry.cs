@@ -50,7 +50,7 @@ public class ThingSetRegistry
             return false;
         }
 
-        if (!JsonPointer.TryParse("/" + path, out JsonPointer? pointer))
+        if (!JsonPointer.TryParse("/" + path, out JsonPointer pointer))
         {
             node = null;
             error = ThingSetStatus.BadRequest;
@@ -58,13 +58,15 @@ public class ThingSetRegistry
         }
 
         node = Root;
-        foreach (string segment in pointer)
+        //foreach (string segment in pointer)
+        for (int i = 0; i < pointer.SegmentCount; i++)
         {
+            JsonPointerSegment segment = pointer.GetSegment(i);
             if (node is IThingSetParentNode parent)
             {
                 foreach (ThingSetNode child in parent.Children)
                 {
-                    if (child.Name == segment)
+                    if (segment.AsSpan().Equals(child.Name, StringComparison.InvariantCulture))
                     {
                         node = child;
                         break;
