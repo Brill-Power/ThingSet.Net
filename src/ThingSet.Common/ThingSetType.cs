@@ -12,7 +12,7 @@ namespace ThingSet.Common;
 /// <summary>
 /// Represents the type of an item in ThingSet.
 /// </summary>
-public struct ThingSetType : IEquatable<ThingSetType>
+public readonly struct ThingSetType : IEquatable<ThingSetType>
 {
     public static readonly ThingSetType Boolean = "bool";
     public static readonly ThingSetType UInt8 = "u8";
@@ -40,7 +40,7 @@ public struct ThingSetType : IEquatable<ThingSetType>
         Type = type;
     }
 
-    public string Type { get; }
+    public readonly string Type { get; }
 
     /// <summary>
     /// Gets whether this value represents an array type. The type of
