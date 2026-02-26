@@ -22,12 +22,12 @@ public static class CborSerialiser
         writer.WriteEndMap();
     }
 
-    private static void WriteArray(CborWriter writer, Array array)
+    private static void WriteCollection(CborWriter writer, ICollection array)
     {
-        writer.WriteStartArray(array.Length);
-        for (int i = 0; i < array.Length; i++)
+        writer.WriteStartArray(array.Count);
+        foreach (object o in array)
         {
-            Write(writer, array.GetValue(i));
+            Write(writer, o);
         }
         writer.WriteEndArray();
     }
@@ -90,8 +90,8 @@ public static class CborSerialiser
             case IDictionary d:
                 WriteMap(writer, d);
                 break;
-            case Array a:
-                WriteArray(writer, a);
+            case ICollection c:
+                WriteCollection(writer, c);
                 break;
             case Enum e:
                 Write(writer, Convert.ChangeType(value, value.GetType().GetEnumUnderlyingType()));
