@@ -13,7 +13,7 @@ public static class ThingSetClientExtensions
 {
     private const uint NodeID = 0x1d;
 
-    public static bool TryGetNodeId(this IThingSetClient thingSetClient, [NotNullWhen(true)] out ulong? nodeId)
+    public static bool TryGetEui(this IThingSetClient thingSetClient, [NotNullWhen(true)] out ulong? nodeId)
     {
         object? result;
         try

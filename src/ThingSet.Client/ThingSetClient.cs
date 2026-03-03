@@ -36,7 +36,7 @@ public class ThingSetClient : IThingSetClient
     {
     }
 
-    public ThingSetClient(IClientTransport transport, ulong? targetNodeId) : this(transport, new DefaultThingSetSchemaProvider(), targetNodeId)
+    public ThingSetClient(IClientTransport transport, ulong? targetEui) : this(transport, new DefaultThingSetSchemaProvider(), targetEui)
     {
     }
 
@@ -44,17 +44,18 @@ public class ThingSetClient : IThingSetClient
     {
     }
 
-    public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider, ulong? targetNodeId)
+    public ThingSetClient(IClientTransport transport, IThingSetSchemaProvider schemaProvider, ulong? targetEui)
     {
         _transport = transport;
         _schemaProvider = schemaProvider;
-        TargetNodeID = targetNodeId;
+        TargetEui = targetEui;
     }
 
     /// <summary>
-    /// The target node if this client is forwarding requests to another node.
+    /// The EUI of the target device if this client is sending requests to a gateway which will
+    /// forward them to another device.
     /// </summary>
-    public ulong? TargetNodeID { get; }
+    public ulong? TargetEui { get; }
 
     /// <summary>
     /// Connects to the ThingSet device.
@@ -166,12 +167,12 @@ public class ThingSetClient : IThingSetClient
         byte[] buffer = new byte[4095];
         Span<byte> span = buffer;
         int length = 0;
-        if (TargetNodeID.HasValue)
+        if (TargetEui.HasValue)
         {
             // prefix the request with node to forward to
             span[0] = (byte)ThingSetRequest.Forward;
             CborWriter w = new CborWriter(CborConformanceMode.Lax);
-            w.WriteTextString($"{TargetNodeID.Value:x}");
+            w.WriteTextString($"{TargetEui.Value:x}");
             w.Encode(span.Slice(1));
             span = span.Slice(1 + w.BytesWritten);
             length = 1 + w.BytesWritten;

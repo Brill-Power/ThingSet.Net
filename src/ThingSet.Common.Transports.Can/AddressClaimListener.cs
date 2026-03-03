@@ -82,8 +82,8 @@ public class AddressClaimListener : IAddressClaimListener
                 {
                     byte bridgeId = CanID.GetBridge(readFrame.CanId);
                     ReadOnlySpan<byte> data = readFrame.Data;
-                    ulong nodeId = BinaryPrimitives.ReadUInt64BigEndian(readFrame.Data);
-                    AddressClaimed?.Invoke(this, new AddressClaimEventArgs(peerId, bridgeId, nodeId));
+                    ulong eui = BinaryPrimitives.ReadUInt64BigEndian(readFrame.Data);
+                    AddressClaimed?.Invoke(this, new AddressClaimEventArgs(peerId, bridgeId, eui));
                 }
             }
         }
