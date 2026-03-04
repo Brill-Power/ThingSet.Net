@@ -7,13 +7,13 @@ namespace ThingSet.Common.Transports.Can;
 
 public class AddressClaimEventArgs : AddressEventArgs
 {
-    public AddressClaimEventArgs(byte nodeAddress, byte bridgeId, ulong nodeId)
+    public AddressClaimEventArgs(byte nodeAddress, byte bridgeId, ulong eui)
         : base(nodeAddress)
     {
         BridgeId = bridgeId;
-        NodeId = nodeId;
+        Eui = eui;
     }
 
     public byte BridgeId { get; }
-    public ulong NodeId { get; }
+    public ulong Eui { get; }
 }
